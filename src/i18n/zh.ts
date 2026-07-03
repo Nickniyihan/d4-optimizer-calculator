@@ -163,6 +163,9 @@ export const zh: TranslationShape<typeof en> = {
     critChanceCap: "暴击率上限（游戏默认）(%)",
     defaultTargetQuality: "默认目标品质",
     capstoneBonus: "精造加成（有效值，可编辑）(%)",
+    greaterAffixBonus: "太古词条加成 (%)",
+    greaterAffixBonusHelp:
+      "太古词条的有效加成。默认 25%。用于装备词条基础 roll 反推和目标值模拟，可根据实测或 planner 口径自行调整。",
     treatTypeAllAsOneBucket: "全伤/类型增倍视为同桶",
   },
   settings: {
@@ -261,6 +264,10 @@ export const zh: TranslationShape<typeof en> = {
     affixes: "词条",
     itemAffixes: "装备词条",
     extraGems: "额外 / 宝石",
+    greaterAffix: "太古词条",
+    greaterAffixShort: "太古",
+    greaterAffixStarHelp:
+      "太古词条：按高级设置中的太古词条加成参与词条数值计算。",
     itemIndependentMultipliers: "独立乘区 / 威能",
     itemIndependentMultipliersHelp:
       "登记绑定在当前装备上的威能、暗金特效或其他独立乘区。每一行输入 n%，实际倍率按 1 + n% 计算。候选装备比较时，这些乘区会跟随装备一起替换。",
@@ -279,6 +286,8 @@ export const zh: TranslationShape<typeof en> = {
     order: "排序",
     moveUp: "上移",
     moveDown: "下移",
+    moveEquipmentUp: "上移装备",
+    moveEquipmentDown: "下移装备",
     noActiveAffixes: "暂无有效词条，请点击“编辑装备”录入。",
     noExtraGemAffixes: "暂无额外 / 宝石词条",
     noAffixes: "暂无词条",
@@ -298,9 +307,9 @@ export const zh: TranslationShape<typeof en> = {
     addExtraGem: "添加额外 / 宝石",
     extra: "额外",
     itemAffixExtraGemHelp:
-      "装备词条会根据输入时品质和输入时精造还原基础值，再按目标品质和目标精造重新计算。额外 / 宝石词条不会受品质或精造影响。",
+      "装备词条会根据输入时品质、太古标记和输入时精造还原基础值，再按目标品质、太古和目标精造重新计算。额外 / 宝石词条不会受品质、太古或精造影响。",
     inputExplanation:
-      "按游戏里看到的数值录入。软件会先根据输入时品质和输入时精造还原基础值，再按目标品质和目标精造重新计算。",
+      "装备词条输入值按当前游戏显示值填写。工具会根据输入时品质、太古标记和输入时精造词条反推基础 roll，再按目标品质、太古和目标精造重新计算。品质、太古和精造加成按 1 + Q + G + M 加法叠加。",
     defaultNames: {
       helm: "头盔",
       chest: "胸甲",
@@ -400,7 +409,7 @@ export const zh: TranslationShape<typeof en> = {
       totalDamageFactor:
         "伤害指数 = 有效武器伤害 x 技能伤害系数 x 各伤害乘区。它用于装备收益比较，不等于游戏内最终跳字。若未填写基础武器伤害或关闭武器伤害计算，则退回为相对指数。",
       quality:
-        "目标值 = 输入值 / 输入品质系数 / 输入精造系数 * 目标品质系数 * 目标精造系数",
+        "普通装备词条使用加法缩放：最终值 = 基础 roll * (1 + 品质加成 + 太古词条加成 + 精造加成)。额外 / 宝石和独立乘区 / 威能不使用这套缩放。",
       capstoneBonus:
         "用于模拟精造命中某条词条后的有效增幅。不同版本或显示方式可能有差异，因此保留为可编辑。",
       weaponDamageInactive:

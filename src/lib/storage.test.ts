@@ -21,7 +21,12 @@ function createExportableState() {
         targetCapstoneAffixId: "affix-b",
         affixes: [
           { id: "affix-a", type: "mainStat" as const, value: 100 },
-          { id: "affix-b", type: "critChance" as const, value: 0.06 },
+          {
+            id: "affix-b",
+            type: "critChance" as const,
+            value: 0.06,
+            isGreaterAffix: true,
+          },
         ],
         extraAffixes: [
           { id: "extra-a", type: "weaponDamage" as const, value: 690 },
@@ -74,6 +79,7 @@ describe("JSON import/export helpers", () => {
 
     expect(parsed.baseInputs).toBeDefined();
     expect(parsed.equipment[0].affixes).toHaveLength(2);
+    expect(parsed.equipment[0].affixes[1].isGreaterAffix).toBe(true);
     expect(parsed.equipment[0].extraAffixes).toHaveLength(2);
     expect(parsed.equipment[0].itemIndependentMultipliers).toHaveLength(2);
     expect(parsed.quickDeltas).toHaveLength(1);
@@ -118,6 +124,26 @@ describe("JSON import/export helpers", () => {
     );
 
     expect(imported.equipment[0].extraAffixes).toEqual([]);
+  });
+
+  it("defaults missing Greater Affix fields for old imports", () => {
+    const state = createExportableState();
+    const oldAffixes = state.equipment[0].affixes.map(
+      ({ isGreaterAffix: _isGreaterAffix, ...affix }) => affix,
+    );
+    const oldState = {
+      ...state,
+      baseInputs: {
+        ...state.baseInputs,
+        greaterAffixBonus: undefined,
+      },
+      equipment: [{ ...state.equipment[0], affixes: oldAffixes }],
+    };
+
+    const imported = parseImportedState(JSON.stringify(oldState));
+
+    expect(imported.baseInputs.greaterAffixBonus).toBe(0.25);
+    expect(imported.equipment[0].affixes[0].isGreaterAffix).toBe(false);
   });
 
   it("defaults missing optional itemIndependentMultipliers to an empty array", () => {
@@ -213,7 +239,7 @@ describe("JSON import/export helpers", () => {
 
     const imported = parseImportedState(JSON.stringify(oldState));
 
-    expect(imported.includeGlobalIndependentMultipliers).toBe(true);
+    expect(imported.includeGlobalIndependentMultipliers).toBe(false);
     expect(imported.globalIndependentMultipliers).toEqual([]);
   });
 

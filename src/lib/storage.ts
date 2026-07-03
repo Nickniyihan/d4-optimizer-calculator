@@ -98,7 +98,7 @@ export function normalizeImportedState(parsed: unknown): AppState {
     includeGlobalIndependentMultipliers:
       typeof parsed.includeGlobalIndependentMultipliers === "boolean"
         ? parsed.includeGlobalIndependentMultipliers
-        : true,
+        : false,
     globalIndependentMultipliers: Array.isArray(
       parsed.globalIndependentMultipliers,
     )
@@ -255,6 +255,7 @@ function readAffix(value: Record<string, unknown>, fallbackId: string) {
     id: String(value.id ?? fallbackId),
     type: isAffixType(value.type) ? value.type : "critChance",
     value: Number(value.value) || 0,
+    isGreaterAffix: value.isGreaterAffix === true,
   };
 }
 

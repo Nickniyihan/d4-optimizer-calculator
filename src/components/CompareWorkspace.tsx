@@ -5,14 +5,12 @@ import {
   AffixGroup,
   AffixType,
   BaseInputs,
-  CandidateCapstoneRecommendation,
   ComparisonBreakdown,
   DeltaRow,
   EquipmentItem,
   GearTotals,
   ItemIndependentMultiplier,
   buildCandidateReplacementEquipment,
-  calculateCandidateCapstoneRecommendations,
   calculateCandidateRowContribution,
   createEquipmentItem,
   createId,
@@ -25,7 +23,6 @@ import {
 } from "./EquipmentSimulationEditor";
 import {
   formatFactor,
-  formatBucketValue,
   formatSignedPercent,
   inputValueForAffix,
   valueFromAffixInput,
@@ -94,27 +91,6 @@ export function CompareWorkspace({
         ? buildCandidateReplacementEquipment(equipment, selectedItem.id, candidate)
         : equipment,
     [candidate, equipment, selectedItem],
-  );
-  const capstoneRecommendations = useMemo(
-    () =>
-      selectedItem
-        ? calculateCandidateCapstoneRecommendations({
-            baseInputs,
-            equipment,
-            replacedItemId: selectedItem.id,
-            candidate,
-            globalIndependentMultiplierFactor,
-            deltas: candidateContextDeltas,
-          })
-        : [],
-    [
-      baseInputs,
-      candidate,
-      candidateContextDeltas,
-      equipment,
-      globalIndependentMultiplierFactor,
-      selectedItem,
-    ],
   );
 
   useEffect(() => {
@@ -258,6 +234,7 @@ export function CompareWorkspace({
                 t={t}
                 item={selectedItem}
                 capstoneBonus={baseInputs.capstoneBonus}
+                greaterAffixBonus={baseInputs.greaterAffixBonus}
                 title={t.equipment.affixes}
               />
             </div>
@@ -272,6 +249,8 @@ export function CompareWorkspace({
               baseInputs={baseInputs}
               equipment={candidateReplacementEquipment}
               contributionHelp={t.candidate.candidateContributionHelp}
+              capstoneDeltas={candidateContextDeltas}
+              globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
               getAffixContribution={getCandidateAffixContribution}
               getItemIndependentContribution={getCandidateItemMultiplierContribution}
             />
@@ -285,10 +264,6 @@ export function CompareWorkspace({
               </button>
               {replaceMessage && <span className="positive">{replaceMessage}</span>}
             </div>
-            <CandidateCapstoneRecommendationTable
-              t={t}
-              recommendations={capstoneRecommendations}
-            />
           </div>
         </div>
       )}
@@ -318,54 +293,6 @@ export function CompareWorkspace({
         </div>
       )}
     </section>
-  );
-}
-
-function CandidateCapstoneRecommendationTable({
-  t,
-  recommendations,
-}: {
-  t: Translation;
-  recommendations: CandidateCapstoneRecommendation[];
-}) {
-  return (
-    <div className="miniPanel">
-      <h3>{t.candidate.candidateCapstoneRecommendation}</h3>
-      <p>{t.candidate.candidateCapstoneRecommendationHelp}</p>
-      {recommendations.length === 0 ? (
-        <p>{t.candidate.noCandidateCapstoneAffixes}</p>
-      ) : (
-        <div className="capstoneGainTable">
-          <div className="capstoneGainRow capstoneGainHeader">
-            <span>{t.equipment.capstoneAffix}</span>
-            <span>{t.equipment.affixValue}</span>
-            <span>{t.equipment.totalDamageGain}</span>
-          </div>
-          {recommendations.map((row) => (
-            <div
-              className={
-                row.isCurrent
-                  ? "capstoneGainRow currentCapstoneRow"
-                  : "capstoneGainRow"
-              }
-              key={row.affix.id}
-            >
-              <span className="truncate" title={t.affix.types[row.affix.type]}>
-                {t.affix.types[row.affix.type]}
-              </span>
-              <strong>{formatBucketValue(row.affix.type, row.value)}</strong>
-              <strong
-                className={
-                  row.gain > 0 ? "positive" : row.gain < 0 ? "negative" : "neutral"
-                }
-              >
-                {formatSignedPercent(row.gain)}
-              </strong>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

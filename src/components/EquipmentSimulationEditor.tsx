@@ -5,12 +5,13 @@ import {
   AffixGroup,
   AffixType,
   BaseInputs,
+  DeltaRow,
   EquipmentItem,
   ItemIndependentMultiplier,
+  calculateEquipmentSetupBreakdown,
   calculateItemIndependentMultiplierContribution,
   createItemIndependentMultiplier,
   calculateEquipmentAffixContribution,
-  calculateEquipmentBreakdown,
   createEmptyAffix,
   getEffectiveAffixValue,
   itemIndependentMultiplierRowFactor,
@@ -37,6 +38,8 @@ interface EquipmentSimulationEditorProps {
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
   contributionHelp?: string;
+  capstoneDeltas?: DeltaRow[];
+  globalIndependentMultiplierFactor?: number;
   getAffixContribution?: (affix: Affix, group: AffixGroup) => number;
   getItemIndependentContribution?: (
     multiplier: ItemIndependentMultiplier,
@@ -51,6 +54,8 @@ export function EquipmentSimulationEditor({
   baseInputs,
   equipment,
   contributionHelp,
+  capstoneDeltas = [],
+  globalIndependentMultiplierFactor = 1,
   getAffixContribution,
   getItemIndependentContribution,
 }: EquipmentSimulationEditorProps) {
@@ -115,6 +120,14 @@ export function EquipmentSimulationEditor({
         contributionHelp={contributionHelp}
         getAffixContribution={getAffixContribution}
         getItemIndependentContribution={getItemIndependentContribution}
+        onAffixGreaterChange={(affixId, isGreaterAffix) =>
+          onChange({
+            ...item,
+            affixes: item.affixes.map((affix) =>
+              affix.id === affixId ? { ...affix, isGreaterAffix } : affix,
+            ),
+          })
+        }
         onTargetCapstoneChange={(targetCapstoneAffixId) =>
           onChange({ ...item, targetCapstoneAffixId })
         }
@@ -136,6 +149,8 @@ export function EquipmentSimulationEditor({
           equipment={equipment}
           baseInputs={baseInputs}
           capstoneBonus={capstoneBonus}
+          deltas={capstoneDeltas}
+          globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
         />
       )}
 
@@ -163,6 +178,7 @@ function AffixSimulationTable({
   onTargetCapstoneChange,
   onMoveAffix,
   onMoveExtraAffix,
+  onAffixGreaterChange,
   onItemIndependentMultipliersChange,
   contributionHelp,
   getAffixContribution,
@@ -181,6 +197,7 @@ function AffixSimulationTable({
   onTargetCapstoneChange: (affixId: string | null) => void;
   onMoveAffix: (affixId: string, direction: "up" | "down") => void;
   onMoveExtraAffix: (affixId: string, direction: "up" | "down") => void;
+  onAffixGreaterChange: (affixId: string, isGreaterAffix: boolean) => void;
   onItemIndependentMultipliersChange: (
     rows: ItemIndependentMultiplier[],
   ) => void;
@@ -203,6 +220,7 @@ function AffixSimulationTable({
         <div className="affixValueTable">
           <div className="affixValueRow affixValueHeader">
             <span>{t.equipment.capstone}</span>
+            <span>{t.equipment.greaterAffixShort}</span>
             <span>{t.equipment.affixes}</span>
             <span>{t.equipment.value}</span>
             <span title={effectiveContributionHelp}>
@@ -224,6 +242,7 @@ function AffixSimulationTable({
             <span />
             <span />
             <span />
+            <span />
           </div>
           {meaningfulAffixes.map((affix, index) => (
             <div className="affixValueRow" key={affix.id}>
@@ -236,13 +255,26 @@ function AffixSimulationTable({
                 />
                 <span className="srOnly">{t.equipment.capstone}</span>
               </label>
+              <GreaterAffixStar
+                t={t}
+                active={affix.isGreaterAffix === true}
+                onToggle={() =>
+                  onAffixGreaterChange(affix.id, affix.isGreaterAffix !== true)
+                }
+              />
               <span className="truncate" title={t.affix.types[affix.type]}>
                 {t.affix.types[affix.type]}
               </span>
               <strong>
                 {formatBucketValue(
                   affix.type,
-                  getEffectiveAffixValue(item, affix, "item", capstoneBonus),
+                  getEffectiveAffixValue(
+                    item,
+                    affix,
+                    "item",
+                    capstoneBonus,
+                    baseInputs?.greaterAffixBonus,
+                  ),
                 )}
               </strong>
               <AffixContribution
@@ -461,6 +493,29 @@ function ItemIndependentMultiplierTable({
   );
 }
 
+function GreaterAffixStar({
+  t,
+  active,
+  onToggle,
+}: {
+  t: Translation;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={active ? "greaterAffixStar active" : "greaterAffixStar"}
+      title={t.equipment.greaterAffixStarHelp}
+      aria-label={t.equipment.greaterAffix}
+      aria-pressed={active}
+      onClick={onToggle}
+    >
+      {active ? "★" : "☆"}
+    </button>
+  );
+}
+
 function AffixOrderControls({
   t,
   canMoveUp,
@@ -569,11 +624,13 @@ export function NormalizedAffixValues({
   t,
   item,
   capstoneBonus,
+  greaterAffixBonus,
   title,
 }: {
   t: Translation;
   item: EquipmentItem;
   capstoneBonus: number;
+  greaterAffixBonus?: number;
   title: string;
 }) {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
@@ -603,7 +660,12 @@ export function NormalizedAffixValues({
               <strong>
                 {formatBucketValue(
                   affix.type,
-                  normalizeEquipmentAffix(item, affix, capstoneBonus),
+                  normalizeEquipmentAffix(
+                    item,
+                    affix,
+                    capstoneBonus,
+                    greaterAffixBonus,
+                  ),
                 )}
               </strong>
             </li>
@@ -613,7 +675,12 @@ export function NormalizedAffixValues({
               <span className="truncate" title={t.affix.types[affix.type]}>
                 {t.equipment.extra}: {t.affix.types[affix.type]}
               </span>
-              <strong>{formatBucketValue(affix.type, affix.value)}</strong>
+              <strong>
+                {formatBucketValue(
+                  affix.type,
+                  getEffectiveAffixValue(item, affix, "extra", capstoneBonus),
+                )}
+              </strong>
             </li>
           ))}
           {meaningfulItemMultipliers.map((row) => (
@@ -639,12 +706,16 @@ function CapstoneGainComparison({
   equipment,
   baseInputs,
   capstoneBonus,
+  deltas,
+  globalIndependentMultiplierFactor,
 }: {
   t: Translation;
   item: EquipmentItem;
   equipment: EquipmentItem[];
   baseInputs: BaseInputs;
   capstoneBonus: number;
+  deltas: DeltaRow[];
+  globalIndependentMultiplierFactor: number;
 }) {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
 
@@ -658,24 +729,34 @@ function CapstoneGainComparison({
   }
 
   const baselineItem = { ...item, targetCapstoneAffixId: null };
-  const baseline = calculateEquipmentBreakdown(
+  const baseline = calculateEquipmentSetupBreakdown({
     baseInputs,
-    replaceEquipmentItem(equipment, item.id, baselineItem),
-  ).totalDamageFactor;
-  const rows = meaningfulAffixes.map((affix) => {
+    equipment: replaceEquipmentItem(equipment, item.id, baselineItem),
+    globalIndependentMultiplierFactor,
+    deltas,
+  }).totalDamageFactor;
+  const rows = meaningfulAffixes.map((affix, index) => {
     const simulatedItem = { ...item, targetCapstoneAffixId: affix.id };
-    const after = calculateEquipmentBreakdown(
+    const after = calculateEquipmentSetupBreakdown({
       baseInputs,
-      replaceEquipmentItem(equipment, item.id, simulatedItem),
-    ).totalDamageFactor;
+      equipment: replaceEquipmentItem(equipment, item.id, simulatedItem),
+      globalIndependentMultiplierFactor,
+      deltas,
+    }).totalDamageFactor;
 
     return {
       affix,
-      value: normalizeEquipmentAffix(simulatedItem, affix, capstoneBonus),
+      index,
+      value: normalizeEquipmentAffix(
+        simulatedItem,
+        affix,
+        capstoneBonus,
+        baseInputs.greaterAffixBonus,
+      ),
       gain: relativeChange(baseline, after),
       isCurrent: item.targetCapstoneAffixId === affix.id,
     };
-  });
+  }).sort((a, b) => b.gain - a.gain || a.index - b.index);
 
   return (
     <div className="miniPanel">
@@ -810,6 +891,7 @@ function RawItemEditModal({
         <div className="rawAffixTable">
           <div className="rawAffixRow rawAffixHeader">
             <span>{t.equipment.inputCapstoneAffix}</span>
+            <span>{t.equipment.greaterAffixShort}</span>
             <span>{t.affix.type}</span>
             <span>{t.affix.value}</span>
             <span />
@@ -827,6 +909,7 @@ function RawItemEditModal({
             <span />
             <span />
             <span />
+            <span />
           </div>
           {draft.affixes.map((affix) => (
             <div className="rawAffixRow" key={affix.id}>
@@ -841,6 +924,16 @@ function RawItemEditModal({
                 />
                 <span className="srOnly">{t.equipment.inputCapstoneAffix}</span>
               </label>
+              <GreaterAffixStar
+                t={t}
+                active={affix.isGreaterAffix === true}
+                onToggle={() =>
+                  updateAffix({
+                    ...affix,
+                    isGreaterAffix: affix.isGreaterAffix !== true,
+                  })
+                }
+              />
               <select
                 value={affix.type}
                 onChange={(event) =>

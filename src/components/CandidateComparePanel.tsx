@@ -5,6 +5,7 @@ import {
   compareWithReplacement,
   createEquipmentItem,
   createId,
+  getEffectiveAffixValue,
   itemIndependentMultiplierRowFactor,
   normalizeEquipmentAffix,
 } from "../lib/damageModel";
@@ -120,12 +121,14 @@ export function CandidateComparePanel({
           title={t.candidate.normalizedCurrent}
           item={selectedItem}
           capstoneBonus={baseInputs.capstoneBonus}
+          greaterAffixBonus={baseInputs.greaterAffixBonus}
         />
         <NormalizedAffixes
           t={t}
           title={t.candidate.normalizedCandidate}
           item={candidate}
           capstoneBonus={baseInputs.capstoneBonus}
+          greaterAffixBonus={baseInputs.greaterAffixBonus}
         />
       </div>
     </section>
@@ -137,11 +140,13 @@ function NormalizedAffixes({
   title,
   item,
   capstoneBonus,
+  greaterAffixBonus,
 }: {
   t: Translation;
   title: string;
   item: EquipmentItem;
   capstoneBonus: number;
+  greaterAffixBonus: number;
 }) {
   return (
     <div className="miniPanel">
@@ -153,7 +158,12 @@ function NormalizedAffixes({
             <strong>
               {formatBucketValue(
                 affix.type,
-                normalizeEquipmentAffix(item, affix, capstoneBonus),
+                normalizeEquipmentAffix(
+                  item,
+                  affix,
+                  capstoneBonus,
+                  greaterAffixBonus,
+                ),
               )}
             </strong>
           </li>
@@ -163,7 +173,12 @@ function NormalizedAffixes({
             <span>
               {t.equipment.extra}: {t.affix.types[affix.type]}
             </span>
-            <strong>{formatBucketValue(affix.type, affix.value)}</strong>
+            <strong>
+              {formatBucketValue(
+                affix.type,
+                getEffectiveAffixValue(item, affix, "extra", capstoneBonus),
+              )}
+            </strong>
           </li>
         ))}
         {(item.itemIndependentMultipliers ?? [])

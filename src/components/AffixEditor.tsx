@@ -22,6 +22,20 @@ export function AffixEditor({
 }: AffixEditorProps) {
   return (
     <div className="affixRow">
+      <button
+        type="button"
+        className={
+          affix.isGreaterAffix ? "greaterAffixStar active" : "greaterAffixStar"
+        }
+        title={t.equipment.greaterAffixStarHelp}
+        aria-label={t.equipment.greaterAffix}
+        aria-pressed={affix.isGreaterAffix === true}
+        onClick={() =>
+          onChange({ ...affix, isGreaterAffix: affix.isGreaterAffix !== true })
+        }
+      >
+        {affix.isGreaterAffix ? "★" : "☆"}
+      </button>
       <label>
         <span>{t.affix.type}</span>
         <select

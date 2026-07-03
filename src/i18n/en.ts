@@ -162,6 +162,9 @@ export const en = {
     critChanceCap: "Crit Chance Cap (game default) (%)",
     defaultTargetQuality: "Default Target Quality",
     capstoneBonus: "Capstone Bonus (effective, editable) (%)",
+    greaterAffixBonus: "Greater Affix Bonus (%)",
+    greaterAffixBonusHelp:
+      "Effective bonus for Greater Affixes. Defaults to 25%. Used for base roll normalization and target value simulation; adjust if your testing or planner convention differs.",
     treatTypeAllAsOneBucket: "Treat Type/All as one bucket",
   },
   settings: {
@@ -261,6 +264,10 @@ export const en = {
     affixes: "Affixes",
     itemAffixes: "Item Affixes",
     extraGems: "Extra / Gems",
+    greaterAffix: "Greater Affix",
+    greaterAffixShort: "GA",
+    greaterAffixStarHelp:
+      "Greater Affix: applies the Greater Affix bonus from Advanced Settings to this affix's value calculation.",
     itemIndependentMultipliers: "Independent / Aspect Multipliers",
     itemIndependentMultipliersHelp:
       "Register Aspects, Unique effects, or other independent multipliers tied to the current item. Each row is entered as n%, and the actual multiplier is 1 + n%. In candidate comparison, these multipliers are replaced together with the item.",
@@ -279,6 +286,8 @@ export const en = {
     order: "Order",
     moveUp: "Move up",
     moveDown: "Move down",
+    moveEquipmentUp: "Move equipment up",
+    moveEquipmentDown: "Move equipment down",
     noActiveAffixes: "No active affixes yet. Click Edit Item to enter values.",
     noExtraGemAffixes: "No extra / gem affixes",
     noAffixes: "No affixes",
@@ -298,9 +307,9 @@ export const en = {
     addExtraGem: "Add Extra / Gem",
     extra: "Extra",
     itemAffixExtraGemHelp:
-      "Item affixes are normalized using input quality and input capstone, then recalculated using target quality and target capstone. Extra / gem affixes are not affected by quality or capstone.",
+      "Item affixes are normalized using input quality, Greater Affix state, and input capstone, then recalculated using target quality, Greater Affix state, and target capstone. Extra / gem affixes are not affected by quality, Greater Affix, or capstone.",
     inputExplanation:
-      "Enter values exactly as they appear in-game. The app normalizes them using input quality and input capstone, then reapplies target quality and target capstone in the simulation view.",
+      "Enter item affix values as currently shown in game. The tool normalizes them back to a base roll using input quality, Greater Affix state, and input capstone, then recalculates them using target quality, Greater Affix state, and target capstone. Quality, Greater Affix, and capstone bonuses are combined additively as 1 + Q + G + M.",
     defaultNames: {
       helm: "Helm",
       chest: "Chest",
@@ -400,7 +409,7 @@ export const en = {
       totalDamageFactor:
         "Damage Index = effective weapon damage x skill damage factor x damage factors. It is for gear comparison and is not the exact final in-game damage number. If base weapon damage is missing or weapon damage is disabled, it falls back to a relative index.",
       quality:
-        "targetValue = inputValue / inputQualityFactor / inputCapstoneFactor * targetQualityFactor * targetCapstoneFactor",
+        "Normal item affixes use additive scaling: finalValue = baseRoll * (1 + qualityBonus + greaterAffixBonus + capstoneBonus). Extra / Gems and Independent / Aspect multipliers ignore this scaling.",
       capstoneBonus:
         "Effective bonus applied when capstone/masterwork hits an affix. This may vary by version or display convention, so it remains editable.",
       weaponDamageInactive:

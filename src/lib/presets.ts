@@ -46,7 +46,7 @@ export function createDefaultState(names: EquipmentNameMap): AppState {
       },
     ],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
-    includeGlobalIndependentMultipliers: true,
+    includeGlobalIndependentMultipliers: false,
     globalIndependentMultipliers: [],
   };
 }
@@ -87,7 +87,7 @@ export function createGlovesComparisonPreset(names: EquipmentNameMap): AppState 
       },
     ],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
-    includeGlobalIndependentMultipliers: true,
+    includeGlobalIndependentMultipliers: false,
     globalIndependentMultipliers: [],
   };
 }

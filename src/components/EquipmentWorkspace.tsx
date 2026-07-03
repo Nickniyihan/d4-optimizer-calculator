@@ -7,6 +7,7 @@ import {
   normalizeEquipmentAffix,
 } from "../lib/damageModel";
 import { Translation } from "../i18n";
+import { reorderEquipmentItem } from "../lib/equipmentOrder";
 import { duplicateEquipmentItem } from "../lib/presets";
 import { EquipmentSimulationEditor } from "./EquipmentSimulationEditor";
 import { formatBucketValue, formatNumber } from "./format";
@@ -61,8 +62,13 @@ export function EquipmentWorkspace({
         </div>
 
         <div className="equipmentList">
-          {equipment.map((item) => {
-            const previewLines = summarizeAffixes(t, item, capstoneBonus);
+          {equipment.map((item, index) => {
+            const previewLines = summarizeAffixes(
+              t,
+              item,
+              capstoneBonus,
+              baseInputs.greaterAffixBonus,
+            );
 
             return (
               <div
@@ -99,6 +105,32 @@ export function EquipmentWorkspace({
                       {item.name}
                     </strong>
                   </button>
+                  <span className="equipmentListOrderControls">
+                    <button
+                      type="button"
+                      className="iconButton"
+                      title={t.equipment.moveEquipmentUp}
+                      aria-label={t.equipment.moveEquipmentUp}
+                      disabled={index === 0}
+                      onClick={() =>
+                        onChange(reorderEquipmentItem(equipment, item.id, "up"))
+                      }
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      title={t.equipment.moveEquipmentDown}
+                      aria-label={t.equipment.moveEquipmentDown}
+                      disabled={index === equipment.length - 1}
+                      onClick={() =>
+                        onChange(reorderEquipmentItem(equipment, item.id, "down"))
+                      }
+                    >
+                      ↓
+                    </button>
+                  </span>
                 </div>
                 {previewLines.map((line, index) => (
                   <button
@@ -170,6 +202,7 @@ function summarizeAffixes(
   t: Translation,
   item: EquipmentItem,
   capstoneBonus: number,
+  greaterAffixBonus: number,
 ): string[] {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
   const meaningfulExtraAffixes = (item.extraAffixes ?? []).filter(
@@ -190,7 +223,7 @@ function summarizeAffixes(
   const previewAffixes = meaningfulAffixes.slice(0, 4).map((affix) =>
     `${t.affix.types[affix.type]} ${formatBucketValue(
       affix.type,
-      normalizeEquipmentAffix(item, affix, capstoneBonus),
+      normalizeEquipmentAffix(item, affix, capstoneBonus, greaterAffixBonus),
     )}`,
   );
   const remainingCount = meaningfulAffixes.length - previewAffixes.length;

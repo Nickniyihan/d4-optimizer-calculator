@@ -87,7 +87,8 @@ export function BaseSettingsWorkspace({
       | "baseCritDamageAdditive"
       | "baseVulnerableDamageAdditive"
       | "critChanceCap"
-      | "capstoneBonus",
+      | "capstoneBonus"
+      | "greaterAffixBonus",
     value: number,
   ) => {
     onBaseInputsChange({ ...baseInputs, [field]: fromPercentInput(value) });
@@ -275,6 +276,12 @@ export function BaseSettingsWorkspace({
             title={t.formula.tooltips.capstoneBonus}
             value={baseInputs.capstoneBonus}
             onChange={(value) => updatePercentField("capstoneBonus", value)}
+          />
+          <PercentField
+            label={t.baseFields.greaterAffixBonus}
+            title={t.baseFields.greaterAffixBonusHelp}
+            value={baseInputs.greaterAffixBonus}
+            onChange={(value) => updatePercentField("greaterAffixBonus", value)}
           />
           <PercentField
             label={t.baseFields.critChanceCap}

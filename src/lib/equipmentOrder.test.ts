@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEquipmentItem } from "./damageModel";
-import { reorderAffixInEquipmentItem } from "./equipmentOrder";
+import { reorderAffixInEquipmentItem, reorderEquipmentItem } from "./equipmentOrder";
 
 describe("equipment affix reordering", () => {
   it("reorders normal item affixes while keeping ids and values", () => {
@@ -60,5 +60,32 @@ describe("equipment affix reordering", () => {
     expect(reordered.affixes[0].id).toBe("b");
     expect(reordered.inputCapstoneAffixId).toBe("b");
     expect(reordered.targetCapstoneAffixId).toBe("b");
+  });
+});
+
+describe("equipment list reordering", () => {
+  it("reorders equipment while preserving ids", () => {
+    const helm = createEquipmentItem("Helm", 0);
+    const chest = createEquipmentItem("Chest", 0);
+    const gloves = createEquipmentItem("Gloves", 0);
+    helm.id = "helm";
+    chest.id = "chest";
+    gloves.id = "gloves";
+
+    const reordered = reorderEquipmentItem([helm, chest, gloves], "chest", "up");
+
+    expect(reordered.map((item) => item.id)).toEqual(["chest", "helm", "gloves"]);
+    expect(reordered[0]).toBe(chest);
+  });
+
+  it("keeps the equipment list unchanged at boundaries", () => {
+    const helm = createEquipmentItem("Helm", 0);
+    const chest = createEquipmentItem("Chest", 0);
+    helm.id = "helm";
+    chest.id = "chest";
+    const equipment = [helm, chest];
+
+    expect(reorderEquipmentItem(equipment, "helm", "up")).toBe(equipment);
+    expect(reorderEquipmentItem(equipment, "missing", "down")).toBe(equipment);
   });
 });

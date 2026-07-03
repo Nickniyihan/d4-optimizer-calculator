@@ -34,6 +34,7 @@ export interface BaseInputs {
   critChanceCap: number;
   defaultTargetQuality: number;
   capstoneBonus: number;
+  greaterAffixBonus: number;
   treatTypeAllAsOneBucket: boolean;
 }
 
@@ -41,6 +42,7 @@ export interface Affix {
   id: string;
   type: AffixType;
   value: number;
+  isGreaterAffix?: boolean;
 }
 
 export interface EquipmentItem {
@@ -159,6 +161,8 @@ export interface NormalizeAffixValueParams {
   inputQuality: number;
   targetQuality: number;
   capstoneBonus: number;
+  greaterAffixBonus?: number;
+  isGreaterAffix?: boolean;
   inputHasCapstone: boolean;
   targetHasCapstone: boolean;
 }
@@ -262,12 +266,13 @@ export const DEFAULT_BASE_INPUTS: BaseInputs = {
   baseMainSkillRank: 1,
   includeSkillRankDamage: true,
   mainSkillBaseMultiplier: 100,
-  includeSkillBaseMultiplier: true,
+  includeSkillBaseMultiplier: false,
   baseCritMultiplier: 1.5,
   baseVulnerableMultiplier: 1.2,
   critChanceCap: 1,
   defaultTargetQuality: 25,
-  capstoneBonus: 0.333333,
+  capstoneBonus: 0.5,
+  greaterAffixBonus: 0.25,
   treatTypeAllAsOneBucket: true,
 };
 
@@ -285,16 +290,16 @@ export const EMPTY_GEAR_TOTALS: GearTotals = {
 };
 
 export const DEFAULT_TYPICAL_ROLLS: TypicalRolls = {
-  critChance: 0.06,
-  critDamageMultiplier: 0.45,
-  vulnerableDamageMultiplier: 0.25,
-  typeAllDamageMultiplier: 0.1,
-  mainStat: 300,
-  additiveDamage: 1,
-  critDamageAdditive: 1,
-  vulnerableDamageAdditive: 1,
-  skillRanks: 3,
-  weaponDamage: 690,
+  critChance: 0.075,
+  critDamageMultiplier: 0.38,
+  vulnerableDamageMultiplier: 0.21,
+  typeAllDamageMultiplier: 0.15,
+  mainStat: 182,
+  additiveDamage: 0.75,
+  critDamageAdditive: 0.75,
+  vulnerableDamageAdditive: 0.6,
+  skillRanks: 4,
+  weaponDamage: 286,
 };
 
 export const DEFAULT_GLOBAL_INDEPENDENT_MULTIPLIERS: GlobalIndependentMultiplier[] =
@@ -321,6 +326,7 @@ export function createEmptyAffix(type: AffixType = "critChance"): Affix {
     id: createId("affix"),
     type,
     value: 0,
+    isGreaterAffix: false,
   };
 }
 
@@ -370,35 +376,40 @@ export function normalizeAffixValueToTarget({
   inputQuality,
   targetQuality,
   capstoneBonus,
+  greaterAffixBonus = DEFAULT_BASE_INPUTS.greaterAffixBonus,
+  isGreaterAffix = false,
   inputHasCapstone,
   targetHasCapstone,
 }: NormalizeAffixValueParams): number {
-  const inputQualityFactor = 1 + inputQuality / 100;
-  const targetQualityFactor = 1 + targetQuality / 100;
-  const inputCapstoneFactor = inputHasCapstone ? 1 + capstoneBonus : 1;
-  const targetCapstoneFactor = targetHasCapstone ? 1 + capstoneBonus : 1;
+  const greaterBonus = isGreaterAffix ? greaterAffixBonus : 0;
+  const inputScale =
+    1 + inputQuality / 100 + greaterBonus + (inputHasCapstone ? capstoneBonus : 0);
+  const targetScale =
+    1 +
+    targetQuality / 100 +
+    greaterBonus +
+    (targetHasCapstone ? capstoneBonus : 0);
 
-  if (inputQualityFactor === 0 || inputCapstoneFactor === 0) {
+  if (inputScale === 0) {
     return 0;
   }
 
-  return (
-    (inputValue / inputQualityFactor / inputCapstoneFactor) *
-    targetQualityFactor *
-    targetCapstoneFactor
-  );
+  return (inputValue / inputScale) * targetScale;
 }
 
 export function normalizeEquipmentAffix(
   item: EquipmentItem,
   affix: Affix,
   capstoneBonus: number,
+  greaterAffixBonus = DEFAULT_BASE_INPUTS.greaterAffixBonus,
 ): number {
   const value = normalizeAffixValueToTarget({
     inputValue: affix.value,
     inputQuality: item.inputQuality,
     targetQuality: item.targetQuality,
     capstoneBonus,
+    greaterAffixBonus,
+    isGreaterAffix: affix.isGreaterAffix,
     inputHasCapstone: item.inputCapstoneAffixId === affix.id,
     targetHasCapstone: item.targetCapstoneAffixId === affix.id,
   });
@@ -416,7 +427,12 @@ export function aggregateGear(
     }
 
     item.affixes.forEach((affix) => {
-      const value = normalizeEquipmentAffix(item, affix, baseInputs.capstoneBonus);
+      const value = normalizeEquipmentAffix(
+        item,
+        affix,
+        baseInputs.capstoneBonus,
+        baseInputs.greaterAffixBonus,
+      );
       addAffixToGearTotals(totals, affix.type, value);
     });
 
@@ -439,12 +455,13 @@ export function getEffectiveAffixValue(
   affix: Affix,
   group: AffixGroup,
   capstoneBonus: number,
+  greaterAffixBonus = DEFAULT_BASE_INPUTS.greaterAffixBonus,
 ): number {
   return group === "extra"
     ? affix.type === "skillRanks"
       ? coerceSkillRankAffixValue(affix.value)
       : affix.value
-    : normalizeEquipmentAffix(item, affix, capstoneBonus);
+    : normalizeEquipmentAffix(item, affix, capstoneBonus, greaterAffixBonus);
 }
 
 export function calculateEquipmentAffixContribution({
@@ -648,6 +665,7 @@ export function calculateCandidateCapstoneRecommendations({
           simulatedCandidate,
           affix,
           baseInputs.capstoneBonus,
+          baseInputs.greaterAffixBonus,
         ),
         gain: relativeChange(baseline, after),
         isCurrent: candidate.targetCapstoneAffixId === affix.id,

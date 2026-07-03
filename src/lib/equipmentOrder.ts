@@ -43,3 +43,23 @@ export function reorderAffixInEquipmentItem(
     [key]: affixes,
   };
 }
+
+export function reorderEquipmentItem(
+  equipment: EquipmentItem[],
+  itemId: string,
+  direction: MoveDirection,
+): EquipmentItem[] {
+  const index = equipment.findIndex((item) => item.id === itemId);
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+
+  if (index < 0 || nextIndex < 0 || nextIndex >= equipment.length) {
+    return equipment;
+  }
+
+  const nextEquipment = [...equipment];
+  const item = nextEquipment[index];
+  nextEquipment[index] = nextEquipment[nextIndex];
+  nextEquipment[nextIndex] = item;
+
+  return nextEquipment;
+}

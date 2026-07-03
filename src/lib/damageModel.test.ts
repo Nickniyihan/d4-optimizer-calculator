@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BASE_INPUTS,
+  DEFAULT_TYPICAL_ROLLS,
   EMPTY_GEAR_TOTALS,
   GearTotals,
   aggregateGear,
@@ -19,6 +20,7 @@ import {
   compareWithReplacement,
   createEquipmentItem,
   getSkillRankMultiplier,
+  normalizeEquipmentAffix,
   normalizeAffixValueToTarget,
   replaceEquipmentItemWithCandidate,
 } from "./damageModel";
@@ -59,7 +61,7 @@ describe("normalizeAffixValueToTarget", () => {
     ).toBeCloseTo(0.25);
   });
 
-  it("applies target capstone after target quality", () => {
+  it("combines target quality and capstone additively", () => {
     expect(
       normalizeAffixValueToTarget({
         inputValue: 0.25,
@@ -69,13 +71,13 @@ describe("normalizeAffixValueToTarget", () => {
         inputHasCapstone: false,
         targetHasCapstone: true,
       }),
-    ).toBeCloseTo(0.46875);
+    ).toBeCloseTo(0.4375);
   });
 
-  it("removes input capstone before applying target state", () => {
+  it("removes input quality and capstone before applying target state", () => {
     expect(
       normalizeAffixValueToTarget({
-        inputValue: 0.46875,
+        inputValue: 0.4375,
         inputQuality: 25,
         targetQuality: 0,
         capstoneBonus: 0.5,
@@ -83,6 +85,52 @@ describe("normalizeAffixValueToTarget", () => {
         targetHasCapstone: false,
       }),
     ).toBeCloseTo(0.25);
+  });
+
+  it("preserves a Greater Affix display value when input and target state match", () => {
+    expect(
+      normalizeAffixValueToTarget({
+        inputValue: 125,
+        inputQuality: 0,
+        targetQuality: 0,
+        capstoneBonus: 0.5,
+        greaterAffixBonus: 0.25,
+        isGreaterAffix: true,
+        inputHasCapstone: false,
+        targetHasCapstone: false,
+      }),
+    ).toBeCloseTo(125);
+  });
+
+  it("uses additive quality, Greater Affix, and capstone scaling", () => {
+    const value = normalizeAffixValueToTarget({
+      inputValue: 125,
+      inputQuality: 0,
+      targetQuality: 25,
+      capstoneBonus: 0.5,
+      greaterAffixBonus: 0.25,
+      isGreaterAffix: true,
+      inputHasCapstone: false,
+      targetHasCapstone: true,
+    });
+
+    expect(value).toBeCloseTo(200);
+    expect(value).not.toBeCloseTo(234.375);
+  });
+
+  it("normalizes an input value that already includes Greater Affix scaling", () => {
+    expect(
+      normalizeAffixValueToTarget({
+        inputValue: 125,
+        inputQuality: 0,
+        targetQuality: 25,
+        capstoneBonus: 0.5,
+        greaterAffixBonus: 0.25,
+        isGreaterAffix: true,
+        inputHasCapstone: false,
+        targetHasCapstone: false,
+      }),
+    ).toBeCloseTo(150);
   });
 });
 
@@ -205,8 +253,24 @@ describe("damage formula", () => {
     expect(comparison.totalRelativeChange).toBeGreaterThan(0);
   });
 
-  it("uses the effective capstone bonus default", () => {
-    expect(DEFAULT_BASE_INPUTS.capstoneBonus).toBeCloseTo(0.333333, 5);
+  it("uses the configured capstone bonus default", () => {
+    expect(DEFAULT_BASE_INPUTS.capstoneBonus).toBeCloseTo(0.5);
+  });
+
+  it("matches the configured reference affix defaults", () => {
+    expect(DEFAULT_TYPICAL_ROLLS).toMatchObject({
+      critChance: 0.075,
+      mainStat: 182,
+      critDamageMultiplier: 0.38,
+      vulnerableDamageMultiplier: 0.21,
+      typeAllDamageMultiplier: 0.15,
+      additiveDamage: 0.75,
+      critDamageAdditive: 0.75,
+      vulnerableDamageAdditive: 0.6,
+      skillRanks: 4,
+      weaponDamage: 286,
+    });
+    expect(DEFAULT_BASE_INPUTS.includeSkillBaseMultiplier).toBe(false);
   });
 
   it("matches Glove A delta", () => {
@@ -611,7 +675,12 @@ describe("candidate item comparison helpers", () => {
     candidate.inputCapstoneAffixId = "candidate-main";
     candidate.targetCapstoneAffixId = "candidate-main";
     candidate.affixes = [
-      { id: "candidate-main", type: "mainStat", value: 300 },
+      {
+        id: "candidate-main",
+        type: "mainStat",
+        value: 300,
+        isGreaterAffix: true,
+      },
     ];
     candidate.extraAffixes = [
       { id: "candidate-extra", type: "typeAllDamageMultiplier", value: 0.2 },
@@ -626,6 +695,7 @@ describe("candidate item comparison helpers", () => {
     expect(replacement.enabled).toBe(false);
     expect(replacement.name).toBe("Candidate");
     expect(replacement.affixes).toEqual(candidate.affixes);
+    expect(replacement.affixes[0].isGreaterAffix).toBe(true);
     expect(replacement.extraAffixes).toEqual(candidate.extraAffixes);
     expect(replacement.itemIndependentMultipliers).toEqual(
       candidate.itemIndependentMultipliers,
@@ -716,8 +786,43 @@ describe("extra / gem affixes", () => {
     );
 
     expect(totals.gearTypeAllDamageMultiplier).toBeCloseTo(
-      0.1 * 1.25 * (1 + DEFAULT_BASE_INPUTS.capstoneBonus),
+      0.1 * (1 + 0.25 + DEFAULT_BASE_INPUTS.capstoneBonus),
     );
+  });
+
+  it("applies Greater Affix scaling to normal item affixes", () => {
+    const item = createEquipmentItem("Greater item", 0);
+    item.affixes = [
+      {
+        id: "greater-type",
+        type: "typeAllDamageMultiplier",
+        value: 0.125,
+        isGreaterAffix: true,
+      },
+    ];
+    item.extraAffixes = [];
+
+    expect(
+      aggregateGear([item], DEFAULT_BASE_INPUTS).gearTypeAllDamageMultiplier,
+    ).toBeCloseTo(0.125);
+  });
+
+  it("does not apply Greater Affix scaling to extra / gem affixes", () => {
+    const item = createEquipmentItem("Extra greater ignored", 25);
+    item.affixes = [{ id: "normal", type: "mainStat", value: 100 }];
+    item.extraAffixes = [
+      {
+        id: "extra-type",
+        type: "typeAllDamageMultiplier",
+        value: 0.1,
+        isGreaterAffix: true,
+      },
+    ];
+    item.targetCapstoneAffixId = "normal";
+
+    expect(
+      aggregateGear([item], DEFAULT_BASE_INPUTS).gearTypeAllDamageMultiplier,
+    ).toBeCloseTo(0.1);
   });
 
   it("calculates per-affix contribution against removing only that affix", () => {
@@ -839,7 +944,7 @@ describe("weapon damage layer", () => {
     item.targetCapstoneAffixId = "weapon";
 
     expect(aggregateGear([item], DEFAULT_BASE_INPUTS).gearWeaponDamage).toBeCloseTo(
-      125 * (1 + DEFAULT_BASE_INPUTS.capstoneBonus),
+      100 * (1 + 0.25 + DEFAULT_BASE_INPUTS.capstoneBonus),
     );
   });
 
@@ -885,7 +990,7 @@ describe("weapon damage layer", () => {
     expect(imported.baseInputs.baseWeaponDamageMin).toBe(0);
     expect(imported.baseInputs.baseWeaponDamageMax).toBe(0);
     expect(imported.baseInputs.includeWeaponDamage).toBe(true);
-    expect(imported.typicalRolls.weaponDamage).toBe(690);
+    expect(imported.typicalRolls.weaponDamage).toBe(286);
   });
 });
 
@@ -998,7 +1103,24 @@ describe("skill rank damage layer", () => {
     item.extraAffixes = [];
     item.targetCapstoneAffixId = "skill";
 
-    expect(aggregateGear([item], DEFAULT_BASE_INPUTS).gearSkillRanks).toBe(3);
+    expect(aggregateGear([item], DEFAULT_BASE_INPUTS).gearSkillRanks).toBe(4);
+  });
+
+  it("rounds normal item skill ranks after Greater Affix scaling", () => {
+    const item = createEquipmentItem("Greater skill item", 25);
+    item.affixes = [
+      { id: "skill", type: "skillRanks", value: 2.5, isGreaterAffix: true },
+    ];
+    item.extraAffixes = [];
+    item.targetCapstoneAffixId = "skill";
+
+    expect(normalizeEquipmentAffix(item, item.affixes[0], 0.5, 0.25)).toBe(4);
+    expect(
+      aggregateGear(
+        [item],
+        { ...DEFAULT_BASE_INPUTS, capstoneBonus: 0.5, greaterAffixBonus: 0.25 },
+      ).gearSkillRanks,
+    ).toBe(4);
   });
 
   it("extra / gem skill ranks ignore quality and capstone but still round", () => {
@@ -1053,7 +1175,7 @@ describe("skill rank damage layer", () => {
     expect(imported.baseInputs.baseMainSkillRank).toBe(1);
     expect(imported.baseInputs.includeSkillRankDamage).toBe(true);
     expect(imported.baseInputs.mainSkillBaseMultiplier).toBe(100);
-    expect(imported.baseInputs.includeSkillBaseMultiplier).toBe(true);
-    expect(imported.typicalRolls.skillRanks).toBe(3);
+    expect(imported.baseInputs.includeSkillBaseMultiplier).toBe(false);
+    expect(imported.typicalRolls.skillRanks).toBe(4);
   });
 });
