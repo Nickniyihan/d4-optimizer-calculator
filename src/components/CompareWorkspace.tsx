@@ -1,14 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AFFIX_TYPES,
+  Affix,
+  AffixGroup,
   AffixType,
   BaseInputs,
+  CandidateCapstoneRecommendation,
   ComparisonBreakdown,
   DeltaRow,
   EquipmentItem,
   GearTotals,
+  ItemIndependentMultiplier,
+  buildCandidateReplacementEquipment,
+  calculateCandidateCapstoneRecommendations,
+  calculateCandidateRowContribution,
   createEquipmentItem,
   createId,
+  replaceEquipmentItemWithCandidate,
 } from "../lib/damageModel";
 import { Language, Translation } from "../i18n";
 import {
@@ -17,6 +25,7 @@ import {
 } from "./EquipmentSimulationEditor";
 import {
   formatFactor,
+  formatBucketValue,
   formatSignedPercent,
   inputValueForAffix,
   valueFromAffixInput,
@@ -40,10 +49,12 @@ interface CompareWorkspaceProps {
   quickDeltas: DeltaRow[];
   onQuickDeltasChange: (deltas: DeltaRow[]) => void;
   equipment: EquipmentItem[];
+  onEquipmentChange: (equipment: EquipmentItem[]) => void;
   selectedItemId: string;
   onSelectedItemIdChange: (itemId: string) => void;
   candidate: EquipmentItem;
   onCandidateChange: (item: EquipmentItem) => void;
+  globalIndependentMultiplierFactor: number;
   comparison: ComparisonBreakdown | null;
 }
 
@@ -65,20 +76,102 @@ export function CompareWorkspace({
   quickDeltas,
   onQuickDeltasChange,
   equipment,
+  onEquipmentChange,
   selectedItemId,
   onSelectedItemIdChange,
   candidate,
   onCandidateChange,
+  globalIndependentMultiplierFactor,
   comparison,
 }: CompareWorkspaceProps) {
+  const [replaceMessage, setReplaceMessage] = useState("");
   const selectedItem =
     equipment.find((item) => item.id === selectedItemId) ?? equipment[0];
+  const candidateContextDeltas = sourceMode === "applyBoth" ? quickDeltas : [];
+  const candidateReplacementEquipment = useMemo(
+    () =>
+      selectedItem
+        ? buildCandidateReplacementEquipment(equipment, selectedItem.id, candidate)
+        : equipment,
+    [candidate, equipment, selectedItem],
+  );
+  const capstoneRecommendations = useMemo(
+    () =>
+      selectedItem
+        ? calculateCandidateCapstoneRecommendations({
+            baseInputs,
+            equipment,
+            replacedItemId: selectedItem.id,
+            candidate,
+            globalIndependentMultiplierFactor,
+            deltas: candidateContextDeltas,
+          })
+        : [],
+    [
+      baseInputs,
+      candidate,
+      candidateContextDeltas,
+      equipment,
+      globalIndependentMultiplierFactor,
+      selectedItem,
+    ],
+  );
 
   useEffect(() => {
     if (!selectedItem && equipment[0]) {
       onSelectedItemIdChange(equipment[0].id);
     }
   }, [equipment, onSelectedItemIdChange, selectedItem]);
+
+  useEffect(() => {
+    setReplaceMessage("");
+  }, [candidate, selectedItem?.id]);
+
+  const getCandidateAffixContribution = (affix: Affix, group: AffixGroup) => {
+    if (!selectedItem) {
+      return 0;
+    }
+
+    return calculateCandidateRowContribution({
+      baseInputs,
+      equipment,
+      replacedItemId: selectedItem.id,
+      candidate,
+      rowId: affix.id,
+      rowKind: group === "extra" ? "extraAffix" : "itemAffix",
+      globalIndependentMultiplierFactor,
+      deltas: candidateContextDeltas,
+    });
+  };
+  const getCandidateItemMultiplierContribution = (
+    multiplier: ItemIndependentMultiplier,
+  ) => {
+    if (!selectedItem) {
+      return 0;
+    }
+
+    return calculateCandidateRowContribution({
+      baseInputs,
+      equipment,
+      replacedItemId: selectedItem.id,
+      candidate,
+      rowId: multiplier.id,
+      rowKind: "itemIndependentMultiplier",
+      globalIndependentMultiplierFactor,
+      deltas: candidateContextDeltas,
+    });
+  };
+  const replaceCurrentItem = () => {
+    if (!selectedItem || !window.confirm(t.candidate.confirmReplaceCurrentItem)) {
+      return;
+    }
+
+    const replacement = replaceEquipmentItemWithCandidate(selectedItem, candidate);
+    onEquipmentChange(
+      equipment.map((item) => (item.id === selectedItem.id ? replacement : item)),
+    );
+    setReplaceMessage(t.candidate.replaceCurrentItemSuccess);
+  };
 
   return (
     <section className="compareWorkspace">
@@ -170,12 +263,33 @@ export function CompareWorkspace({
             </div>
           </div>
 
-          <EquipmentSimulationEditor
-            t={t}
-            item={candidate}
-            capstoneBonus={baseInputs.capstoneBonus}
-            onChange={onCandidateChange}
-          />
+          <div className="candidateEditorPane">
+            <EquipmentSimulationEditor
+              t={t}
+              item={candidate}
+              capstoneBonus={baseInputs.capstoneBonus}
+              onChange={onCandidateChange}
+              baseInputs={baseInputs}
+              equipment={candidateReplacementEquipment}
+              contributionHelp={t.candidate.candidateContributionHelp}
+              getAffixContribution={getCandidateAffixContribution}
+              getItemIndependentContribution={getCandidateItemMultiplierContribution}
+            />
+            <div className="buttonRow candidateActions">
+              <button
+                type="button"
+                className="secondaryButton"
+                onClick={replaceCurrentItem}
+              >
+                {t.candidate.replaceCurrentItem}
+              </button>
+              {replaceMessage && <span className="positive">{replaceMessage}</span>}
+            </div>
+            <CandidateCapstoneRecommendationTable
+              t={t}
+              recommendations={capstoneRecommendations}
+            />
+          </div>
         </div>
       )}
 
@@ -204,6 +318,54 @@ export function CompareWorkspace({
         </div>
       )}
     </section>
+  );
+}
+
+function CandidateCapstoneRecommendationTable({
+  t,
+  recommendations,
+}: {
+  t: Translation;
+  recommendations: CandidateCapstoneRecommendation[];
+}) {
+  return (
+    <div className="miniPanel">
+      <h3>{t.candidate.candidateCapstoneRecommendation}</h3>
+      <p>{t.candidate.candidateCapstoneRecommendationHelp}</p>
+      {recommendations.length === 0 ? (
+        <p>{t.candidate.noCandidateCapstoneAffixes}</p>
+      ) : (
+        <div className="capstoneGainTable">
+          <div className="capstoneGainRow capstoneGainHeader">
+            <span>{t.equipment.capstoneAffix}</span>
+            <span>{t.equipment.affixValue}</span>
+            <span>{t.equipment.totalDamageGain}</span>
+          </div>
+          {recommendations.map((row) => (
+            <div
+              className={
+                row.isCurrent
+                  ? "capstoneGainRow currentCapstoneRow"
+                  : "capstoneGainRow"
+              }
+              key={row.affix.id}
+            >
+              <span className="truncate" title={t.affix.types[row.affix.type]}>
+                {t.affix.types[row.affix.type]}
+              </span>
+              <strong>{formatBucketValue(row.affix.type, row.value)}</strong>
+              <strong
+                className={
+                  row.gain > 0 ? "positive" : row.gain < 0 ? "negative" : "neutral"
+                }
+              >
+                {formatSignedPercent(row.gain)}
+              </strong>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

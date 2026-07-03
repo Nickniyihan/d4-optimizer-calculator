@@ -426,6 +426,17 @@ export const en = {
     normalizedCandidate: "Candidate normalized target affixes",
     currentEnabledItem: "Current enabled item",
     comparingAgainstCurrentItem: "Comparing against current enabled item",
+    candidateCapstoneRecommendation: "Candidate Capstone Recommendation",
+    candidateCapstoneRecommendationHelp:
+      "Calculated in the full setup after replacing the current item with the candidate item. The baseline is the candidate item with no target capstone selected; each row shows the Damage Index gain from capstoning that candidate affix.",
+    noCandidateCapstoneAffixes:
+      "No candidate item affixes can be capstoned",
+    replaceCurrentItem: "Replace Current Item",
+    confirmReplaceCurrentItem:
+      "This will replace the currently compared equipment item with the candidate item. Continue?",
+    replaceCurrentItemSuccess: "Current item replaced with candidate item.",
+    candidateContributionHelp:
+      "Shows the Damage Index gain from keeping this candidate affix, extra/gem row, or aspect multiplier in the candidate replacement setup compared with removing only that row. Contributions do not add up to total damage.",
   },
   importExport: {
     textareaLabel: "JSON data",

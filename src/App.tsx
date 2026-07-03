@@ -421,10 +421,14 @@ export default function App() {
                   setState({ ...state, quickDeltas })
                 }
                 equipment={state.equipment}
+                onEquipmentChange={(equipment) => setState({ ...state, equipment })}
                 selectedItemId={candidateItemId}
                 onSelectedItemIdChange={setCandidateItemId}
                 candidate={candidate}
                 onCandidateChange={setCandidate}
+                globalIndependentMultiplierFactor={
+                  globalIndependentMultiplierFactor
+                }
                 comparison={activeComparison}
               />
             )}

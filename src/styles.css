@@ -795,6 +795,15 @@ p {
   gap: 0.75rem;
 }
 
+.candidateEditorPane {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.candidateActions {
+  align-items: center;
+}
+
 .compareSummary {
   align-items: center;
   background: #f4efe7;

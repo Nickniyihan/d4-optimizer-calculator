@@ -4,6 +4,10 @@ import {
   EMPTY_GEAR_TOTALS,
   GearTotals,
   aggregateGear,
+  applyDeltasToGearTotals,
+  buildCandidateReplacementEquipment,
+  calculateCandidateCapstoneRecommendations,
+  calculateCandidateRowContribution,
   calculateEquipmentAffixContribution,
   calculateDamageBreakdown,
   calculateEquipmentBreakdown,
@@ -16,6 +20,7 @@ import {
   createEquipmentItem,
   getSkillRankMultiplier,
   normalizeAffixValueToTarget,
+  replaceEquipmentItemWithCandidate,
 } from "./damageModel";
 import { parseImportedState } from "./storage";
 
@@ -429,6 +434,204 @@ describe("equipment independent multiplier layer", () => {
     });
 
     expect(contribution).toBeCloseTo(0.35);
+  });
+});
+
+describe("candidate item comparison helpers", () => {
+  it("calculates candidate normal affix contribution in replacement context", () => {
+    const current = createEquipmentItem("Current", 0);
+    const candidate = createEquipmentItem("Candidate", 0);
+    candidate.affixes = [
+      { id: "candidate-main", type: "mainStat", value: 300 },
+    ];
+
+    const contribution = calculateCandidateRowContribution({
+      baseInputs: DEFAULT_BASE_INPUTS,
+      equipment: [current],
+      replacedItemId: current.id,
+      candidate,
+      rowId: "candidate-main",
+      rowKind: "itemAffix",
+    });
+    const replacementEquipment = buildCandidateReplacementEquipment(
+      [current],
+      current.id,
+      candidate,
+    );
+    const withoutEquipment = buildCandidateReplacementEquipment(
+      [current],
+      current.id,
+      { ...candidate, affixes: [] },
+    );
+    const currentDamage = calculateEquipmentBreakdown(
+      DEFAULT_BASE_INPUTS,
+      replacementEquipment,
+    ).totalDamageFactor;
+    const withoutDamage = calculateEquipmentBreakdown(
+      DEFAULT_BASE_INPUTS,
+      withoutEquipment,
+    ).totalDamageFactor;
+
+    expect(contribution).toBeCloseTo(currentDamage / withoutDamage - 1);
+  });
+
+  it("calculates candidate extra / gem contribution in replacement context", () => {
+    const current = createEquipmentItem("Current", 0);
+    const candidate = createEquipmentItem("Candidate", 0);
+    candidate.affixes = [];
+    candidate.extraAffixes = [
+      { id: "candidate-extra", type: "typeAllDamageMultiplier", value: 0.2 },
+    ];
+
+    const contribution = calculateCandidateRowContribution({
+      baseInputs: DEFAULT_BASE_INPUTS,
+      equipment: [current],
+      replacedItemId: current.id,
+      candidate,
+      rowId: "candidate-extra",
+      rowKind: "extraAffix",
+    });
+
+    expect(contribution).toBeCloseTo(0.2);
+  });
+
+  it("calculates candidate independent / aspect multiplier contribution", () => {
+    const current = createEquipmentItem("Current", 0);
+    const candidate = createEquipmentItem("Candidate", 0);
+    candidate.affixes = [];
+    candidate.itemIndependentMultipliers = [
+      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+    ];
+
+    const contribution = calculateCandidateRowContribution({
+      baseInputs: DEFAULT_BASE_INPUTS,
+      equipment: [current],
+      replacedItemId: current.id,
+      candidate,
+      rowId: "candidate-aspect",
+      rowKind: "itemIndependentMultiplier",
+    });
+
+    expect(contribution).toBeCloseTo(0.35);
+  });
+
+  it("calculates candidate capstone recommendations from normal affixes only", () => {
+    const current = createEquipmentItem("Current", 0);
+    const candidate = createEquipmentItem("Candidate", 25);
+    candidate.affixes = [
+      { id: "candidate-main", type: "mainStat", value: 300 },
+      { id: "candidate-type", type: "typeAllDamageMultiplier", value: 0.1 },
+    ];
+    candidate.extraAffixes = [
+      { id: "candidate-extra", type: "typeAllDamageMultiplier", value: 0.2 },
+    ];
+    candidate.itemIndependentMultipliers = [
+      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+    ];
+    candidate.targetCapstoneAffixId = "candidate-type";
+
+    const recommendations = calculateCandidateCapstoneRecommendations({
+      baseInputs: DEFAULT_BASE_INPUTS,
+      equipment: [current],
+      replacedItemId: current.id,
+      candidate,
+    });
+
+    expect(recommendations.map((row) => row.affix.id).sort()).toEqual([
+      "candidate-main",
+      "candidate-type",
+    ]);
+    expect(recommendations.some((row) => row.affix.id === "candidate-extra")).toBe(
+      false,
+    );
+    expect(
+      recommendations.some((row) => row.affix.id === "candidate-aspect"),
+    ).toBe(false);
+    expect(
+      recommendations.find((row) => row.affix.id === "candidate-type")?.isCurrent,
+    ).toBe(true);
+  });
+
+  it("includes manual deltas in candidate contribution when provided", () => {
+    const current = createEquipmentItem("Current", 0);
+    const candidate = createEquipmentItem("Candidate", 0);
+    const deltas = [{ id: "manual-main", type: "mainStat" as const, value: 200 }];
+    candidate.affixes = [
+      { id: "candidate-main", type: "mainStat", value: 300 },
+    ];
+
+    const contribution = calculateCandidateRowContribution({
+      baseInputs: DEFAULT_BASE_INPUTS,
+      equipment: [current],
+      replacedItemId: current.id,
+      candidate,
+      rowId: "candidate-main",
+      rowKind: "itemAffix",
+      deltas,
+    });
+    const replacementEquipment = buildCandidateReplacementEquipment(
+      [current],
+      current.id,
+      candidate,
+    );
+    const withoutEquipment = buildCandidateReplacementEquipment(
+      [current],
+      current.id,
+      { ...candidate, affixes: [] },
+    );
+    const currentTotals = applyDeltasToGearTotals(
+      aggregateGear(replacementEquipment, DEFAULT_BASE_INPUTS),
+      deltas,
+    );
+    const withoutTotals = applyDeltasToGearTotals(
+      aggregateGear(withoutEquipment, DEFAULT_BASE_INPUTS),
+      deltas,
+    );
+    const currentDamage = calculateDamageBreakdown(
+      DEFAULT_BASE_INPUTS,
+      currentTotals,
+      1,
+      calculateEquipmentIndependentMultiplierFactor(replacementEquipment),
+    ).totalDamageFactor;
+    const withoutDamage = calculateDamageBreakdown(
+      DEFAULT_BASE_INPUTS,
+      withoutTotals,
+      1,
+      calculateEquipmentIndependentMultiplierFactor(withoutEquipment),
+    ).totalDamageFactor;
+
+    expect(contribution).toBeCloseTo(currentDamage / withoutDamage - 1);
+  });
+
+  it("replaces current item data without baking in manual deltas", () => {
+    const current = createEquipmentItem("Current", 0);
+    const candidate = createEquipmentItem("Candidate", 25);
+    current.id = "current-id";
+    current.enabled = false;
+    candidate.inputCapstoneAffixId = "candidate-main";
+    candidate.targetCapstoneAffixId = "candidate-main";
+    candidate.affixes = [
+      { id: "candidate-main", type: "mainStat", value: 300 },
+    ];
+    candidate.extraAffixes = [
+      { id: "candidate-extra", type: "typeAllDamageMultiplier", value: 0.2 },
+    ];
+    candidate.itemIndependentMultipliers = [
+      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+    ];
+
+    const replacement = replaceEquipmentItemWithCandidate(current, candidate);
+
+    expect(replacement.id).toBe("current-id");
+    expect(replacement.enabled).toBe(false);
+    expect(replacement.name).toBe("Candidate");
+    expect(replacement.affixes).toEqual(candidate.affixes);
+    expect(replacement.extraAffixes).toEqual(candidate.extraAffixes);
+    expect(replacement.itemIndependentMultipliers).toEqual(
+      candidate.itemIndependentMultipliers,
+    );
+    expect(replacement.inputCapstoneAffixId).toBe("candidate-main");
+    expect(replacement.targetCapstoneAffixId).toBe("candidate-main");
   });
 });
 

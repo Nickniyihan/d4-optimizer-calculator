@@ -198,6 +198,29 @@ export interface MarginalGain {
 
 export type AffixGroup = "item" | "extra";
 
+export type CandidateContributionRowKind =
+  | "itemAffix"
+  | "extraAffix"
+  | "itemIndependentMultiplier";
+
+export interface CandidateContributionParams {
+  baseInputs: BaseInputs;
+  equipment: EquipmentItem[];
+  replacedItemId: string;
+  candidate: EquipmentItem;
+  rowId: string;
+  rowKind: CandidateContributionRowKind;
+  globalIndependentMultiplierFactor?: number;
+  deltas?: DeltaRow[];
+}
+
+export interface CandidateCapstoneRecommendation {
+  affix: Affix;
+  value: number;
+  gain: number;
+  isCurrent: boolean;
+}
+
 export const AFFIX_TYPES: AffixType[] = [
   "critChance",
   "mainStat",
@@ -499,6 +522,194 @@ export function calculateItemIndependentMultiplierContribution({
   ).totalDamageFactor;
 
   return relativeChange(without, current);
+}
+
+export function buildCandidateReplacementEquipment(
+  equipment: EquipmentItem[],
+  replacedItemId: string,
+  candidate: EquipmentItem,
+): EquipmentItem[] {
+  return equipment.map((item) =>
+    item.id === replacedItemId ? { ...candidate, enabled: true } : item,
+  );
+}
+
+export function calculateEquipmentSetupBreakdown({
+  baseInputs,
+  equipment,
+  globalIndependentMultiplierFactor = 1,
+  deltas = [],
+}: {
+  baseInputs: BaseInputs;
+  equipment: EquipmentItem[];
+  globalIndependentMultiplierFactor?: number;
+  deltas?: DeltaRow[];
+}): DamageBreakdown {
+  if (deltas.length === 0) {
+    return calculateEquipmentBreakdown(
+      baseInputs,
+      equipment,
+      globalIndependentMultiplierFactor,
+    );
+  }
+
+  return calculateDamageBreakdown(
+    baseInputs,
+    applyDeltasToGearTotals(aggregateGear(equipment, baseInputs), deltas),
+    globalIndependentMultiplierFactor,
+    calculateEquipmentIndependentMultiplierFactor(equipment),
+  );
+}
+
+export function calculateCandidateRowContribution({
+  baseInputs,
+  equipment,
+  replacedItemId,
+  candidate,
+  rowId,
+  rowKind,
+  globalIndependentMultiplierFactor = 1,
+  deltas = [],
+}: CandidateContributionParams): number {
+  const replacementEquipment = buildCandidateReplacementEquipment(
+    equipment,
+    replacedItemId,
+    candidate,
+  );
+  const current = calculateEquipmentSetupBreakdown({
+    baseInputs,
+    equipment: replacementEquipment,
+    globalIndependentMultiplierFactor,
+    deltas,
+  }).totalDamageFactor;
+  const candidateWithoutRow = removeCandidateRow(candidate, rowId, rowKind);
+  const withoutEquipment = buildCandidateReplacementEquipment(
+    equipment,
+    replacedItemId,
+    candidateWithoutRow,
+  );
+  const without = calculateEquipmentSetupBreakdown({
+    baseInputs,
+    equipment: withoutEquipment,
+    globalIndependentMultiplierFactor,
+    deltas,
+  }).totalDamageFactor;
+
+  return relativeChange(without, current);
+}
+
+export function calculateCandidateCapstoneRecommendations({
+  baseInputs,
+  equipment,
+  replacedItemId,
+  candidate,
+  globalIndependentMultiplierFactor = 1,
+  deltas = [],
+}: {
+  baseInputs: BaseInputs;
+  equipment: EquipmentItem[];
+  replacedItemId: string;
+  candidate: EquipmentItem;
+  globalIndependentMultiplierFactor?: number;
+  deltas?: DeltaRow[];
+}): CandidateCapstoneRecommendation[] {
+  const candidateWithoutCapstone = { ...candidate, targetCapstoneAffixId: null };
+  const baselineEquipment = buildCandidateReplacementEquipment(
+    equipment,
+    replacedItemId,
+    candidateWithoutCapstone,
+  );
+  const baseline = calculateEquipmentSetupBreakdown({
+    baseInputs,
+    equipment: baselineEquipment,
+    globalIndependentMultiplierFactor,
+    deltas,
+  }).totalDamageFactor;
+
+  return candidate.affixes
+    .map((affix, index) => {
+      const simulatedCandidate = { ...candidate, targetCapstoneAffixId: affix.id };
+      const simulatedEquipment = buildCandidateReplacementEquipment(
+        equipment,
+        replacedItemId,
+        simulatedCandidate,
+      );
+      const after = calculateEquipmentSetupBreakdown({
+        baseInputs,
+        equipment: simulatedEquipment,
+        globalIndependentMultiplierFactor,
+        deltas,
+      }).totalDamageFactor;
+
+      return {
+        affix,
+        index,
+        value: normalizeEquipmentAffix(
+          simulatedCandidate,
+          affix,
+          baseInputs.capstoneBonus,
+        ),
+        gain: relativeChange(baseline, after),
+        isCurrent: candidate.targetCapstoneAffixId === affix.id,
+      };
+    })
+    .filter((row) => row.affix.value !== 0)
+    .sort((a, b) => b.gain - a.gain || a.index - b.index)
+    .map(({ index: _index, ...row }) => row);
+}
+
+export function replaceEquipmentItemWithCandidate(
+  currentItem: EquipmentItem,
+  candidate: EquipmentItem,
+): EquipmentItem {
+  return {
+    ...candidate,
+    id: currentItem.id,
+    name: candidate.name.trim() ? candidate.name : currentItem.name,
+    enabled: currentItem.enabled,
+    affixes: candidate.affixes.map((affix) => ({ ...affix })),
+    extraAffixes: (candidate.extraAffixes ?? []).map((affix) => ({ ...affix })),
+    itemIndependentMultipliers: (candidate.itemIndependentMultipliers ?? []).map(
+      (row) => ({ ...row }),
+    ),
+  };
+}
+
+function removeCandidateRow(
+  candidate: EquipmentItem,
+  rowId: string,
+  rowKind: CandidateContributionRowKind,
+): EquipmentItem {
+  if (rowKind === "extraAffix") {
+    return {
+      ...candidate,
+      extraAffixes: (candidate.extraAffixes ?? []).filter(
+        (affix) => affix.id !== rowId,
+      ),
+    };
+  }
+
+  if (rowKind === "itemIndependentMultiplier") {
+    return {
+      ...candidate,
+      itemIndependentMultipliers: (
+        candidate.itemIndependentMultipliers ?? []
+      ).filter((row) => row.id !== rowId),
+    };
+  }
+
+  return {
+    ...candidate,
+    inputCapstoneAffixId:
+      candidate.inputCapstoneAffixId === rowId
+        ? null
+        : candidate.inputCapstoneAffixId,
+    targetCapstoneAffixId:
+      candidate.targetCapstoneAffixId === rowId
+        ? null
+        : candidate.targetCapstoneAffixId,
+    affixes: candidate.affixes.filter((affix) => affix.id !== rowId),
+  };
 }
 
 export function addAffixToGearTotals(

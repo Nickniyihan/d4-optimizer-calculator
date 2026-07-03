@@ -426,6 +426,16 @@ export const zh: TranslationShape<typeof en> = {
     normalizedCandidate: "候选装备的目标归一化词条",
     currentEnabledItem: "当前启用装备",
     comparingAgainstCurrentItem: "正在对比当前启用装备",
+    candidateCapstoneRecommendation: "候选装备精造推荐",
+    candidateCapstoneRecommendationHelp:
+      "基于候选装备替换当前装备后的完整方案计算。基准为候选装备未选择目标精造词条；每一行表示把精造命中该候选词条后的伤害指数收益。",
+    noCandidateCapstoneAffixes: "暂无可精造的候选装备词条",
+    replaceCurrentItem: "替换当前装备",
+    confirmReplaceCurrentItem:
+      "这会用候选装备替换当前正在对比的装备。确定继续吗？",
+    replaceCurrentItemSuccess: "已用候选装备替换当前装备。",
+    candidateContributionHelp:
+      "表示在候选装备替换当前装备后的方案中，保留该候选词条/额外词条/威能乘区相对于移除它带来的伤害指数提升。各行贡献不会相加为总收益。",
   },
   importExport: {
     textareaLabel: "JSON 数据",

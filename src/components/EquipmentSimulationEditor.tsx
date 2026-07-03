@@ -36,6 +36,11 @@ interface EquipmentSimulationEditorProps {
   onChange: (item: EquipmentItem) => void;
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
+  contributionHelp?: string;
+  getAffixContribution?: (affix: Affix, group: AffixGroup) => number;
+  getItemIndependentContribution?: (
+    multiplier: ItemIndependentMultiplier,
+  ) => number;
 }
 
 export function EquipmentSimulationEditor({
@@ -45,6 +50,9 @@ export function EquipmentSimulationEditor({
   onChange,
   baseInputs,
   equipment,
+  contributionHelp,
+  getAffixContribution,
+  getItemIndependentContribution,
 }: EquipmentSimulationEditorProps) {
   const [isEditingRaw, setIsEditingRaw] = useState(false);
 
@@ -104,6 +112,9 @@ export function EquipmentSimulationEditor({
         capstoneBonus={capstoneBonus}
         baseInputs={baseInputs}
         equipment={equipment}
+        contributionHelp={contributionHelp}
+        getAffixContribution={getAffixContribution}
+        getItemIndependentContribution={getItemIndependentContribution}
         onTargetCapstoneChange={(targetCapstoneAffixId) =>
           onChange({ ...item, targetCapstoneAffixId })
         }
@@ -153,12 +164,20 @@ function AffixSimulationTable({
   onMoveAffix,
   onMoveExtraAffix,
   onItemIndependentMultipliersChange,
+  contributionHelp,
+  getAffixContribution,
+  getItemIndependentContribution,
 }: {
   t: Translation;
   item: EquipmentItem;
   capstoneBonus: number;
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
+  contributionHelp?: string;
+  getAffixContribution?: (affix: Affix, group: AffixGroup) => number;
+  getItemIndependentContribution?: (
+    multiplier: ItemIndependentMultiplier,
+  ) => number;
   onTargetCapstoneChange: (affixId: string | null) => void;
   onMoveAffix: (affixId: string, direction: "up" | "down") => void;
   onMoveExtraAffix: (affixId: string, direction: "up" | "down") => void;
@@ -171,6 +190,8 @@ function AffixSimulationTable({
     (affix) => affix.value !== 0,
   );
   const itemIndependentMultipliers = item.itemIndependentMultipliers ?? [];
+  const effectiveContributionHelp =
+    contributionHelp ?? t.equipment.affixContributionHelp;
 
   return (
     <div className="miniPanel">
@@ -184,7 +205,7 @@ function AffixSimulationTable({
             <span>{t.equipment.capstone}</span>
             <span>{t.equipment.affixes}</span>
             <span>{t.equipment.value}</span>
-            <span title={t.equipment.affixContributionHelp}>
+            <span title={effectiveContributionHelp}>
               {t.equipment.contribution}
             </span>
             <span>{t.equipment.order}</span>
@@ -230,6 +251,7 @@ function AffixSimulationTable({
                 item={item}
                 affix={affix}
                 group="item"
+                getContribution={getAffixContribution}
               />
               <AffixOrderControls
                 t={t}
@@ -252,7 +274,7 @@ function AffixSimulationTable({
           <div className="affixValueRow extraAffixValueRow affixValueHeader">
             <span>{t.equipment.affixes}</span>
             <span>{t.equipment.value}</span>
-            <span title={t.equipment.affixContributionHelp}>
+            <span title={effectiveContributionHelp}>
               {t.equipment.contribution}
             </span>
             <span>{t.equipment.order}</span>
@@ -274,6 +296,7 @@ function AffixSimulationTable({
                 item={item}
                 affix={affix}
                 group="extra"
+                getContribution={getAffixContribution}
               />
               <AffixOrderControls
                 t={t}
@@ -296,6 +319,8 @@ function AffixSimulationTable({
         rows={itemIndependentMultipliers}
         baseInputs={baseInputs}
         equipment={equipment}
+        contributionHelp={effectiveContributionHelp}
+        getContribution={getItemIndependentContribution}
         onChange={onItemIndependentMultipliersChange}
       />
     </div>
@@ -308,6 +333,8 @@ function ItemIndependentMultiplierTable({
   rows,
   baseInputs,
   equipment,
+  contributionHelp,
+  getContribution,
   onChange,
 }: {
   t: Translation;
@@ -315,6 +342,8 @@ function ItemIndependentMultiplierTable({
   rows: ItemIndependentMultiplier[];
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
+  contributionHelp: string;
+  getContribution?: (multiplier: ItemIndependentMultiplier) => number;
   onChange: (rows: ItemIndependentMultiplier[]) => void;
 }) {
   const updateRow = (row: ItemIndependentMultiplier) => {
@@ -342,7 +371,7 @@ function ItemIndependentMultiplierTable({
         <span>{t.equipment.name}</span>
         <span>{t.equipment.increase}</span>
         <span>{t.equipment.multiplier}</span>
-        <span title={t.equipment.aspectContributionHelp}>
+        <span title={contributionHelp}>
           {t.equipment.contribution}
         </span>
         <span>{t.equipment.actions}</span>
@@ -387,6 +416,7 @@ function ItemIndependentMultiplierTable({
               equipment={equipment}
               item={item}
               multiplier={row}
+              getContribution={getContribution}
             />
             <span className="globalMultiplierActions">
               <button
@@ -476,24 +506,28 @@ function AffixContribution({
   item,
   affix,
   group,
+  getContribution,
 }: {
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
   item: EquipmentItem;
   affix: Affix;
   group: AffixGroup;
+  getContribution?: (affix: Affix, group: AffixGroup) => number;
 }) {
-  if (!baseInputs || !equipment) {
+  if (!getContribution && (!baseInputs || !equipment)) {
     return <span className="neutral">-</span>;
   }
 
-  const contribution = calculateEquipmentAffixContribution({
-    baseInputs,
-    equipment,
-    itemId: item.id,
-    affixId: affix.id,
-    group,
-  });
+  const contribution = getContribution
+    ? getContribution(affix, group)
+    : calculateEquipmentAffixContribution({
+        baseInputs: baseInputs as BaseInputs,
+        equipment: equipment as EquipmentItem[],
+        itemId: item.id,
+        affixId: affix.id,
+        group,
+      });
   const className =
     contribution > 0 ? "positive" : contribution < 0 ? "negative" : "neutral";
 
@@ -505,22 +539,26 @@ function ItemIndependentContribution({
   equipment,
   item,
   multiplier,
+  getContribution,
 }: {
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
   item: EquipmentItem;
   multiplier: ItemIndependentMultiplier;
+  getContribution?: (multiplier: ItemIndependentMultiplier) => number;
 }) {
-  if (!baseInputs || !equipment) {
+  if (!getContribution && (!baseInputs || !equipment)) {
     return <span className="neutral">-</span>;
   }
 
-  const contribution = calculateItemIndependentMultiplierContribution({
-    baseInputs,
-    equipment,
-    itemId: item.id,
-    multiplierId: multiplier.id,
-  });
+  const contribution = getContribution
+    ? getContribution(multiplier)
+    : calculateItemIndependentMultiplierContribution({
+        baseInputs: baseInputs as BaseInputs,
+        equipment: equipment as EquipmentItem[],
+        itemId: item.id,
+        multiplierId: multiplier.id,
+      });
   const className =
     contribution > 0 ? "positive" : contribution < 0 ? "negative" : "neutral";
 
