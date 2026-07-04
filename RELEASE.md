@@ -11,12 +11,19 @@ pnpm preview
 
 ## GitHub Pages Setup
 
-1. Push the repo to GitHub.
-2. Go to Repo -> Settings -> Pages.
-3. Under Build and deployment, set Source to GitHub Actions.
-4. Push to `main`.
-5. Wait for the Deploy to GitHub Pages workflow to finish.
-6. Open the Pages URL.
+This repo deploys by pushing built files to the `gh-pages` branch.
+
+In GitHub:
+
+1. Go to Repo -> Settings -> Pages.
+2. Under Build and deployment, choose:
+   - Source: Deploy from a branch
+   - Branch: gh-pages
+   - Folder: /root
+3. Push to `main`.
+4. The workflow builds the app and force-pushes `dist/` to `gh-pages`.
+5. Open the Pages URL:
+   `https://<username>.github.io/<repo-name>/`
 
 ## Vite Base Path
 
@@ -34,7 +41,7 @@ the Vite base path should be:
 
 This repo uses `VITE_BASE_PATH` in the GitHub Actions workflow.
 
-For `nickniyihan-DNEG/d4-optimizer-calculator`, the workflow sets:
+For `Nickniyihan/d4-optimizer-calculator`, the workflow sets:
 
 ```text
 /d4-optimizer-calculator/
