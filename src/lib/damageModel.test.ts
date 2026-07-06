@@ -4,13 +4,17 @@ import {
   DEFAULT_TYPICAL_ROLLS,
   EMPTY_GEAR_TOTALS,
   GearTotals,
+  aggregateCustomAffixTotals,
   aggregateGear,
+  applyDeltasToCustomAffixTotals,
   applyDeltasToGearTotals,
   buildCandidateReplacementEquipment,
   calculateCandidateCapstoneRecommendations,
   calculateCandidateRowContribution,
   calculateEquipmentAffixContribution,
   calculateDamageBreakdown,
+  calculateCustomPanelStatBreakdowns,
+  calculateCustomRuleOutputs,
   calculateEquipmentBreakdown,
   calculateEquipmentIndependentMultiplierFactor,
   calculateGlobalIndependentMultiplierFactor,
@@ -131,6 +135,201 @@ describe("normalizeAffixValueToTarget", () => {
         targetHasCapstone: false,
       }),
     ).toBeCloseTo(150);
+  });
+});
+
+describe("custom panel stats and damage rules", () => {
+  const customStats = [
+    {
+      id: "fury",
+      enabled: true,
+      name: "Maximum Fury",
+      affixLabel: "Maximum Fury",
+      baseValue: 100,
+      affixValueScale: 2,
+    },
+  ];
+
+  const ramaladniRule = {
+    id: "ramaladni",
+    enabled: true,
+    name: "Ramaladni",
+    sourceCustomStatId: "fury",
+    percentPerPoint: 0.5,
+    output: "independentMultiplier" as const,
+  };
+
+  it("calculates custom panel stat final value from base plus scaled affixes", () => {
+    const breakdowns = calculateCustomPanelStatBreakdowns(customStats, {
+      fury: 40,
+    });
+
+    expect(breakdowns[0].finalValue).toBe(180);
+  });
+
+  it("aggregates normal custom affixes with scaling and extra custom affixes raw", () => {
+    const item = createEquipmentItem("Ring", 25);
+    item.affixes = [
+      {
+        id: "normal-fury",
+        type: "customStat",
+        customStatId: "fury",
+        value: 125,
+        isGreaterAffix: true,
+      },
+    ];
+    item.extraAffixes = [
+      {
+        id: "gem-fury",
+        type: "customStat",
+        customStatId: "fury",
+        value: 10,
+      },
+    ];
+
+    const totals = aggregateCustomAffixTotals(
+      [item],
+      DEFAULT_BASE_INPUTS,
+      customStats,
+    );
+
+    expect(totals.fury).toBeCloseTo(160);
+  });
+
+  it("ignores disabled equipment for custom stat affixes", () => {
+    const item = createEquipmentItem("Ring", 0);
+    item.enabled = false;
+    item.affixes = [
+      {
+        id: "normal-fury",
+        type: "customStat",
+        customStatId: "fury",
+        value: 40,
+      },
+    ];
+
+    expect(
+      aggregateCustomAffixTotals([item], DEFAULT_BASE_INPUTS, customStats).fury,
+    ).toBeUndefined();
+  });
+
+  it("applies manual custom stat deltas before affix scale", () => {
+    const totals = applyDeltasToCustomAffixTotals(
+      { fury: 40 },
+      [{ id: "delta-fury", type: "customStat", customStatId: "fury", value: 10 }],
+      customStats,
+    );
+    const breakdowns = calculateCustomPanelStatBreakdowns(customStats, totals);
+
+    expect(breakdowns[0].finalValue).toBe(200);
+  });
+
+  it("calculates a Ramaladni-style custom independent multiplier", () => {
+    const statBreakdowns = calculateCustomPanelStatBreakdowns(customStats, {
+      fury: 40,
+    });
+    const outputs = calculateCustomRuleOutputs([ramaladniRule], statBreakdowns);
+
+    expect(outputs.independentMultiplierFactor).toBeCloseTo(1.9);
+  });
+
+  it("merges custom additive outputs into additive buckets", () => {
+    const statBreakdowns = calculateCustomPanelStatBreakdowns(customStats, {
+      fury: 40,
+    });
+    const outputs = calculateCustomRuleOutputs(
+      [
+        {
+          id: "generic",
+          enabled: true,
+          name: "Generic",
+          sourceCustomStatId: "fury",
+          percentPerPoint: 0.5,
+          output: "genericAdditive",
+        },
+        {
+          id: "crit",
+          enabled: true,
+          name: "Crit",
+          sourceCustomStatId: "fury",
+          percentPerPoint: 0.25,
+          output: "critDamageAdditive",
+        },
+        {
+          id: "vulnerable",
+          enabled: true,
+          name: "Vulnerable",
+          sourceCustomStatId: "fury",
+          percentPerPoint: 0.1,
+          output: "vulnerableDamageAdditive",
+        },
+      ],
+      statBreakdowns,
+    );
+
+    expect(outputs.genericAdditive).toBeCloseTo(0.9);
+    expect(outputs.critDamageAdditive).toBeCloseTo(0.45);
+    expect(outputs.vulnerableDamageAdditive).toBeCloseTo(0.18);
+  });
+
+  it("custom independent multiplier scales Damage Index", () => {
+    const withoutCustom = calculateDamageBreakdown(
+      DEFAULT_BASE_INPUTS,
+      EMPTY_GEAR_TOTALS,
+    );
+    const withCustom = calculateDamageBreakdown(
+      DEFAULT_BASE_INPUTS,
+      EMPTY_GEAR_TOTALS,
+      1,
+      1,
+      {
+        customPanelStats: customStats,
+        customAffixTotals: { fury: 40 },
+        customDamageRules: [ramaladniRule],
+      },
+    );
+
+    expect(withCustom.customIndependentMultiplierFactor).toBeCloseTo(1.9);
+    expect(
+      withCustom.totalDamageFactor / withoutCustom.totalDamageFactor,
+    ).toBeCloseTo(1.9);
+  });
+
+  it("candidate replacement recalculates custom stat rules", () => {
+    const current = createEquipmentItem("Current", 0);
+    current.affixes = [
+      {
+        id: "current-fury",
+        type: "customStat",
+        customStatId: "fury",
+        value: 10,
+      },
+    ];
+    const candidate = createEquipmentItem("Candidate", 0);
+    candidate.affixes = [
+      {
+        id: "candidate-fury",
+        type: "customStat",
+        customStatId: "fury",
+        value: 40,
+      },
+    ];
+
+    const comparison = compareWithReplacement(
+      DEFAULT_BASE_INPUTS,
+      [current],
+      current.id,
+      candidate,
+      1,
+      {
+        customPanelStats: customStats,
+        customDamageRules: [ramaladniRule],
+      },
+    );
+
+    expect(comparison.before.customPanelStats[0].finalValue).toBe(120);
+    expect(comparison.after.customPanelStats[0].finalValue).toBe(180);
+    expect(comparison.after.customIndependentMultiplierFactor).toBeCloseTo(1.9);
   });
 });
 

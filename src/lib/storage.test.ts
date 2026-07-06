@@ -54,6 +54,9 @@ function createExportableState() {
     ],
     quickDeltas: [{ id: "delta-a", type: "skillRanks" as const, value: 3 }],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
+    customStatReferenceValues: {},
+    customPanelStats: [],
+    customDamageRules: [],
     includeGlobalIndependentMultipliers: true,
     globalIndependentMultipliers: [
       {
@@ -84,6 +87,8 @@ describe("JSON import/export helpers", () => {
     expect(parsed.equipment[0].itemIndependentMultipliers).toHaveLength(2);
     expect(parsed.quickDeltas).toHaveLength(1);
     expect(parsed.typicalRolls).toBeDefined();
+    expect(parsed.customPanelStats).toEqual([]);
+    expect(parsed.customDamageRules).toEqual([]);
     expect(parsed.includeGlobalIndependentMultipliers).toBe(true);
     expect(parsed.globalIndependentMultipliers).toHaveLength(2);
   });
@@ -241,6 +246,22 @@ describe("JSON import/export helpers", () => {
 
     expect(imported.includeGlobalIndependentMultipliers).toBe(false);
     expect(imported.globalIndependentMultipliers).toEqual([]);
+  });
+
+  it("defaults missing custom stat and rule settings", () => {
+    const state = createExportableState();
+    const {
+      customStatReferenceValues: _customStatReferenceValues,
+      customPanelStats: _customPanelStats,
+      customDamageRules: _customDamageRules,
+      ...oldState
+    } = state;
+
+    const imported = parseImportedState(JSON.stringify(oldState));
+
+    expect(imported.customStatReferenceValues).toEqual({});
+    expect(imported.customPanelStats).toEqual([]);
+    expect(imported.customDamageRules).toEqual([]);
   });
 
   it("preserves global independent multiplier row order", () => {

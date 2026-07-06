@@ -1,6 +1,8 @@
 import {
   BaseInputs,
   ComparisonBreakdown,
+  CustomCalculationContext,
+  CustomPanelStat,
   DamageBreakdown,
   FactorChange,
   GearTotals,
@@ -18,6 +20,7 @@ import {
   formatSignedPercent,
 } from "./format";
 import type { CompareSourceMode } from "./CompareWorkspace";
+import { getAffixDisplayLabel } from "./affixOptions";
 
 export type DashboardTab = "stats" | "marginal" | "breakdown";
 
@@ -31,6 +34,8 @@ interface DashboardProps {
   gearTotals: GearTotals;
   typicalRolls: TypicalRolls;
   globalIndependentMultiplierFactor: number;
+  customPanelStats: CustomPanelStat[];
+  customContext: CustomCalculationContext;
   comparison: ComparisonBreakdown | null;
   comparisonSource: CompareSourceMode;
 }
@@ -47,6 +52,8 @@ export function Dashboard({
   gearTotals,
   typicalRolls,
   globalIndependentMultiplierFactor,
+  customPanelStats,
+  customContext,
   comparison,
   comparisonSource,
 }: DashboardProps) {
@@ -78,6 +85,7 @@ export function Dashboard({
             gearTotals={gearTotals}
             comparison={comparison}
             comparisonSource={comparisonSource}
+            customPanelStats={customPanelStats}
           />
         )}
         {activeTab === "marginal" && (
@@ -91,6 +99,8 @@ export function Dashboard({
             equipmentIndependentMultiplierFactor={
               breakdown.equipmentIndependentMultiplierFactor
             }
+            customPanelStats={customPanelStats}
+            customContext={customContext}
           />
         )}
         {activeTab === "breakdown" && (
@@ -116,6 +126,7 @@ function StatsDashboard({
   gearTotals,
   comparison,
   comparisonSource,
+  customPanelStats,
 }: {
   t: Translation;
   language: Language;
@@ -123,7 +134,19 @@ function StatsDashboard({
   gearTotals: GearTotals;
   comparison: ComparisonBreakdown | null;
   comparisonSource: CompareSourceMode;
+  customPanelStats: CustomPanelStat[];
 }) {
+  const customStatsSummary = breakdown.customPanelStats
+    .filter((stat) => stat.enabled)
+    .map(
+      (stat) =>
+        `${stat.name || stat.affixLabel || t.settings.customPanelStat} ${formatNumber(
+          stat.finalValue,
+          2,
+        )}`,
+    )
+    .join(" · ");
+
   return (
     <div className="dashboardSection">
       <div className="statGrid">
@@ -165,6 +188,23 @@ function StatsDashboard({
             language,
           )}
         />
+        {(breakdown.customPanelStats.length > 0 || customPanelStats.length > 0) && (
+          <DashboardMetric
+            label={t.settings.customPanelStats}
+            title={t.settings.customPanelStatHelpShort}
+            value={customStatsSummary || "-"}
+          />
+        )}
+        {breakdown.customIndependentMultiplierFactor !== 1 && (
+          <DashboardMetric
+            label={t.formula.customIndependentMultiplierFactor}
+            title={t.formula.tooltips.customIndependentMultiplierFactor}
+            value={formatFactor(
+              breakdown.customIndependentMultiplierFactor,
+              language,
+            )}
+          />
+        )}
         <DashboardMetric
           label={t.totals.effectiveWeaponDamage}
           value={
@@ -264,6 +304,8 @@ function MarginalDashboard({
   typicalRolls,
   globalIndependentMultiplierFactor,
   equipmentIndependentMultiplierFactor,
+  customPanelStats,
+  customContext,
 }: {
   t: Translation;
   language: Language;
@@ -272,12 +314,15 @@ function MarginalDashboard({
   typicalRolls: TypicalRolls;
   globalIndependentMultiplierFactor: number;
   equipmentIndependentMultiplierFactor: number;
+  customPanelStats: CustomPanelStat[];
+  customContext: CustomCalculationContext;
 }) {
   const unitGains = calculateUnitMarginalGains(
     baseInputs,
     gearTotals,
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    customContext,
   );
   const typicalGains = calculateMarginalGains(
     baseInputs,
@@ -285,17 +330,28 @@ function MarginalDashboard({
     typicalRolls,
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    customContext,
   );
 
   return (
     <div className="dashboardSection">
       <h3>{t.dashboardLabels.referenceAffixGain}</h3>
       <p>{t.dashboardLabels.referenceAffixGainHelp}</p>
-      <MarginalList t={t} language={language} gains={typicalGains} />
+      <MarginalList
+        t={t}
+        language={language}
+        gains={typicalGains}
+        customPanelStats={customPanelStats}
+      />
       <details className="secondaryMarginalDetails">
         <summary>{t.dashboardLabels.unitIncrementGain}</summary>
         <p>{t.dashboardLabels.unitIncrementGainHelp}</p>
-        <MarginalList t={t} language={language} gains={unitGains} />
+        <MarginalList
+          t={t}
+          language={language}
+          gains={unitGains}
+          customPanelStats={customPanelStats}
+        />
       </details>
     </div>
   );
@@ -305,10 +361,12 @@ function MarginalList({
   t,
   language,
   gains,
+  customPanelStats,
 }: {
   t: Translation;
   language: Language;
   gains: MarginalGain[];
+  customPanelStats: CustomPanelStat[];
 }) {
   return (
     <div className="marginalList">
@@ -319,7 +377,7 @@ function MarginalList({
       {gains.map((gain, index) => (
         <div
           className="marginalRow"
-          key={`${gain.type}-${gain.delta}`}
+          key={`${gain.type}-${gain.customStatId ?? ""}-${gain.delta}`}
           title={
             gain.type === "weaponDamage"
               ? t.formula.tooltips.weaponDamageInactive
@@ -330,7 +388,8 @@ function MarginalList({
         >
           <div>
             <strong>
-              {index + 1}. {t.affix.types[gain.type]}
+              {index + 1}.{" "}
+              {getAffixDisplayLabel(t, gain, customPanelStats)}
             </strong>
             <span>
               {formatBucketValue(gain.type, gain.delta)} ·{" "}
@@ -353,6 +412,7 @@ const factorKeys = [
   "skillDamageFactor",
   "globalIndependentMultiplierFactor",
   "equipmentIndependentMultiplierFactor",
+  "customIndependentMultiplierFactor",
   "mainStatFactor",
   "critFactor",
   "vulnerableFactor",

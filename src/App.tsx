@@ -8,6 +8,8 @@ import {
 } from "./i18n";
 import {
   AppState,
+  applyDeltasToCustomAffixTotals,
+  aggregateCustomAffixTotals,
   aggregateGear,
   calculateDamageBreakdown,
   calculateEquipmentBreakdown,
@@ -89,6 +91,7 @@ export default function App() {
   const [jsonMessage, setJsonMessage] = useState("");
   const [jsonError, setJsonError] = useState("");
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(loadAutoSavePreference);
+  const [equipmentListScrollTop, setEquipmentListScrollTop] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -128,14 +131,38 @@ export default function App() {
     () => calculateEquipmentIndependentMultiplierFactor(state.equipment),
     [state.equipment],
   );
+  const customAffixTotals = useMemo(
+    () =>
+      aggregateCustomAffixTotals(
+        state.equipment,
+        state.baseInputs,
+        state.customPanelStats,
+      ),
+    [state.baseInputs, state.customPanelStats, state.equipment],
+  );
+  const customContext = useMemo(
+    () => ({
+      customPanelStats: state.customPanelStats,
+      customDamageRules: state.customDamageRules,
+      customStatReferenceValues: state.customStatReferenceValues,
+      customAffixTotals,
+    }),
+    [
+      customAffixTotals,
+      state.customDamageRules,
+      state.customPanelStats,
+      state.customStatReferenceValues,
+    ],
+  );
   const breakdown = useMemo(
     () =>
       calculateEquipmentBreakdown(
         state.baseInputs,
         state.equipment,
         globalIndependentMultiplierFactor,
+        customContext,
       ),
-    [globalIndependentMultiplierFactor, state.baseInputs, state.equipment],
+    [customContext, globalIndependentMultiplierFactor, state.baseInputs, state.equipment],
   );
   const activeComparison = useMemo(() => {
     if (compareSourceMode === "manualChangesOnly") {
@@ -145,6 +172,7 @@ export default function App() {
         state.quickDeltas,
         globalIndependentMultiplierFactor,
         equipmentIndependentMultiplierFactor,
+        customContext,
       );
     }
 
@@ -160,6 +188,7 @@ export default function App() {
           selectedItem.id,
           candidate,
           globalIndependentMultiplierFactor,
+          customContext,
       );
     }
 
@@ -167,6 +196,7 @@ export default function App() {
       state.baseInputs,
       state.equipment,
       globalIndependentMultiplierFactor,
+      customContext,
     );
     const replacementEquipment = state.equipment.map((item) =>
       item.id === selectedItem.id ? { ...candidate, enabled: true } : item,
@@ -180,6 +210,18 @@ export default function App() {
       afterGearTotals,
       globalIndependentMultiplierFactor,
       calculateEquipmentIndependentMultiplierFactor(replacementEquipment),
+      {
+        ...customContext,
+        customAffixTotals: applyDeltasToCustomAffixTotals(
+          aggregateCustomAffixTotals(
+            replacementEquipment,
+            state.baseInputs,
+            state.customPanelStats,
+          ),
+          state.quickDeltas,
+          state.customPanelStats,
+        ),
+      },
     );
 
     return compareBreakdowns(before, after);
@@ -190,7 +232,9 @@ export default function App() {
     gearTotals,
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    customContext,
     state.baseInputs,
+    state.customPanelStats,
     state.equipment,
     state.quickDeltas,
   ]);
@@ -343,13 +387,40 @@ export default function App() {
             ))}
           </div>
 
-          <div className="tabContent">
+          <div
+            className={
+              activeWorkTab === "equipment"
+                ? "tabContent equipmentTabContent"
+                : "tabContent"
+            }
+          >
             {activeWorkTab === "baseAndSettings" && (
               <div className="stackedPanels">
                 <BaseSettingsWorkspace
                   t={t}
                   baseInputs={state.baseInputs}
                   typicalRolls={state.typicalRolls}
+                  customStatReferenceValues={state.customStatReferenceValues}
+                  customPanelStats={state.customPanelStats}
+                  customDamageRules={state.customDamageRules}
+                  customPanelStatFinalValues={Object.fromEntries(
+                    breakdown.customPanelStats.map((stat) => [
+                      stat.id,
+                      stat.finalValue,
+                    ]),
+                  )}
+                  customDamageRuleEffects={Object.fromEntries(
+                    breakdown.customDamageRules.map((rule) => [
+                      rule.id,
+                      {
+                        rulePercent: rule.rulePercent,
+                        factor: rule.effectFactor,
+                      },
+                    ]),
+                  )}
+                  customIndependentMultiplierFactor={
+                    breakdown.customIndependentMultiplierFactor
+                  }
                   includeGlobalIndependentMultipliers={
                     state.includeGlobalIndependentMultipliers
                   }
@@ -366,6 +437,15 @@ export default function App() {
                   }
                   onTypicalRollsChange={(typicalRolls) =>
                     setState({ ...state, typicalRolls })
+                  }
+                  onCustomStatReferenceValuesChange={(
+                    customStatReferenceValues,
+                  ) => setState({ ...state, customStatReferenceValues })}
+                  onCustomPanelStatsChange={(customPanelStats) =>
+                    setState({ ...state, customPanelStats })
+                  }
+                  onCustomDamageRulesChange={(customDamageRules) =>
+                    setState({ ...state, customDamageRules })
                   }
                   onIncludeGlobalIndependentMultipliersChange={(
                     includeGlobalIndependentMultipliers,
@@ -402,6 +482,10 @@ export default function App() {
                 baseInputs={state.baseInputs}
                 capstoneBonus={state.baseInputs.capstoneBonus}
                 defaultTargetQuality={state.baseInputs.defaultTargetQuality}
+                customPanelStats={state.customPanelStats}
+                customContext={customContext}
+                listScrollTop={equipmentListScrollTop}
+                onListScrollTopChange={setEquipmentListScrollTop}
                 onChange={(equipment) => setState({ ...state, equipment })}
               />
             )}
@@ -429,6 +513,8 @@ export default function App() {
                 globalIndependentMultiplierFactor={
                   globalIndependentMultiplierFactor
                 }
+                customPanelStats={state.customPanelStats}
+                customContext={customContext}
                 comparison={activeComparison}
               />
             )}
@@ -445,6 +531,8 @@ export default function App() {
           gearTotals={gearTotals}
           typicalRolls={state.typicalRolls}
           globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
+          customPanelStats={state.customPanelStats}
+          customContext={customContext}
           comparison={activeComparison}
           comparisonSource={compareSourceMode}
         />

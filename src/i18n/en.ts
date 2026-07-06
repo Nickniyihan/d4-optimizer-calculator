@@ -108,6 +108,12 @@ export const en = {
       "Contribution = probability x additive factor x crit multiplier x vulnerable multiplier. Expected Combat Factor is the sum of all state contributions.",
     conditionalAdditiveNote:
       "+ Critical Strike Damage and + Vulnerable Damage are not separate multiplier buckets. They are added into the Additive Factor only in the matching state. For example, the Crit / Vulnerable state receives generic additive damage, +Crit Damage, and +Vulnerable Damage.",
+    customPanelStatHelpShort:
+      "Custom panel stat = base value + summed gear affixes x affix effective scale.",
+    customIndependentMultiplierHelp:
+      "Custom Independent Multiplier comes from custom damage rules with output type Independent Multiplier, calculated as product(1 + rule damage%).",
+    customDamageRuleBucketHelp:
+      "Custom damage rules can convert custom panel stats into generic additive damage, +Crit Damage, +Vulnerable Damage, or an independent multiplier. Additive outputs are merged into their corresponding additive buckets; independent outputs are shown as a separate factor.",
     sourceQuickDelta: "Source: Manual Changes",
     sourceCandidateItem: "Source: Candidate Item",
     sourceManualChanges: "Source: Manual Changes",
@@ -181,6 +187,37 @@ export const en = {
       "When disabled, global independent multipliers are ignored in the Damage Index, but the table contents are preserved.",
     globalIndependentMultiplierSummary:
       "Global Independent Multipliers: {count} rows, total x{factor}",
+    customPanelStats: "Custom Panel Stats",
+    customPanelStatsHelp:
+      "Define custom panel stats built from equipment affixes, such as Maximum Fury. Final value = base value + summed gear affixes x affix effective scale.",
+    addCustomPanelStat: "Add Custom Panel Stat",
+    customPanelStat: "Custom Panel Stat",
+    affixLabel: "Affix Label",
+    baseValue: "Base Value",
+    affixValueScale: "Affix Scale",
+    finalValue: "Final Value",
+    customDamageRules: "Custom Damage Rules",
+    customDamageRulesHelp:
+      "Convert custom panel stats into damage gains. Example: Ramaladni gives 0.5% independent damage per point of Maximum Fury.",
+    addCustomDamageRule: "Add Custom Damage Rule",
+    sourceCustomStat: "Source Stat",
+    damagePerPoint: "Damage per Point",
+    outputType: "Output Type",
+    currentEffect: "Current Effect",
+    outputGenericAdditive: "Generic Additive Damage",
+    outputCritDamageAdditive: "+ Critical Strike Damage",
+    outputVulnerableDamageAdditive: "+ Vulnerable Damage",
+    outputIndependentMultiplier: "Independent Multiplier",
+    customIndependentMultiplier: "Custom Independent Multiplier",
+    customPanelStatHelpShort:
+      "Custom panel stat = base value + summed gear affixes x affix effective scale.",
+    customIndependentMultiplierHelp:
+      "Custom Independent Multiplier comes from custom damage rules with output type Independent Multiplier, calculated as product(1 + rule damage%).",
+    customDamageRuleBucketHelp:
+      "Custom damage rules can convert custom panel stats into generic additive damage, +Crit Damage, +Vulnerable Damage, or an independent multiplier. Additive outputs are merged into their corresponding additive buckets; independent outputs are shown as a separate factor.",
+    invalidCustomStat: "Invalid Custom Panel Stat",
+    customAffixFallback: "Custom Affix",
+    customStatReferenceLabel: "{label} Reference",
     addGlobalMultiplier: "Add Global Multiplier",
     globalMultiplier: "Global Independent Multiplier",
     enabled: "Enabled",
@@ -294,6 +331,8 @@ export const en = {
     moreAffixes: "+{count} more",
     selectAffix: "Select affix",
     capstoneGainComparison: "Capstone Gain Comparison",
+    recommendedCapstoneAffix: "Recommended Capstone Affix",
+    currentSelectedCapstoneAffix: "Current Selected Capstone Affix",
     capstoneGainComparisonHelp:
       "At the current quality, compares each capstone target against no selected capstone target.",
     capstoneAffix: "Capstone Affix",
@@ -342,6 +381,7 @@ export const en = {
       vulnerableDamageAdditive: "+ Vulnerable Damage",
       skillRanks: "+ Skill Ranks",
       weaponDamage: "Weapon Damage",
+      customStat: "Custom Affix",
     },
     inputTypes: {
       critChance: "Crit Chance (%)",
@@ -354,6 +394,7 @@ export const en = {
       vulnerableDamageAdditive: "+ Vulnerable Damage (%)",
       skillRanks: "+ Skill Ranks",
       weaponDamage: "Weapon Damage",
+      customStat: "Custom Affix",
     },
   },
   totals: {
@@ -377,6 +418,7 @@ export const en = {
     skillDamageFactor: "Skill Damage Factor",
     globalIndependentMultiplierFactor: "Global Independent Multiplier",
     equipmentIndependentMultiplierFactor: "Equipment Independent Multiplier",
+    customIndependentMultiplierFactor: "Custom Independent Multiplier",
     mainStatFactor: "MainStatFactor",
     critFactor: "CritFactor",
     vulnerableFactor: "VulnerableFactor",
@@ -398,6 +440,8 @@ export const en = {
         "Global Independent Multiplier = the product of all enabled global multiplier rows. Each row is calculated as 1 + increase%. It scales the Damage Index, but if unchanged between current and after-change setups, it usually does not affect percentage gain.",
       equipmentIndependentMultiplierFactor:
         "Equipment Independent Multiplier = the product of Independent / Aspect multiplier rows on all enabled items. Each row is calculated as 1 + increase%. In candidate item comparison, the replaced item's multipliers are replaced as well.",
+      customIndependentMultiplierFactor:
+        "Custom Independent Multiplier comes from custom damage rules with output type Independent Multiplier, calculated as product(1 + rule damage%).",
       critFactor:
         "(reference) (1 - totalCritChance) + totalCritChance * baseCritMultiplier * (1 + totalCritDamageMultiplier)",
       vulnerableFactor:

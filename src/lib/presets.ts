@@ -46,6 +46,9 @@ export function createDefaultState(names: EquipmentNameMap): AppState {
       },
     ],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
+    customStatReferenceValues: {},
+    customPanelStats: [],
+    customDamageRules: [],
     includeGlobalIndependentMultipliers: false,
     globalIndependentMultipliers: [],
   };
@@ -87,6 +90,9 @@ export function createGlovesComparisonPreset(names: EquipmentNameMap): AppState 
       },
     ],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
+    customStatReferenceValues: {},
+    customPanelStats: [],
+    customDamageRules: [],
     includeGlobalIndependentMultipliers: false,
     globalIndependentMultipliers: [],
   };

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AFFIX_TYPES,
   Affix,
   AffixGroup,
-  AffixType,
   BaseInputs,
   ComparisonBreakdown,
+  CustomCalculationContext,
+  CustomPanelStat,
   DeltaRow,
   EquipmentItem,
   GearTotals,
@@ -27,6 +27,11 @@ import {
   inputValueForAffix,
   valueFromAffixInput,
 } from "./format";
+import {
+  buildAffixOptions,
+  encodeAffixOption,
+  parseAffixOption,
+} from "./affixOptions";
 
 export type CompareEditorTab = "manualChanges" | "candidateItem";
 export type CompareSourceMode =
@@ -52,6 +57,8 @@ interface CompareWorkspaceProps {
   candidate: EquipmentItem;
   onCandidateChange: (item: EquipmentItem) => void;
   globalIndependentMultiplierFactor: number;
+  customPanelStats: CustomPanelStat[];
+  customContext: CustomCalculationContext;
   comparison: ComparisonBreakdown | null;
 }
 
@@ -79,6 +86,8 @@ export function CompareWorkspace({
   candidate,
   onCandidateChange,
   globalIndependentMultiplierFactor,
+  customPanelStats,
+  customContext,
   comparison,
 }: CompareWorkspaceProps) {
   const [replaceMessage, setReplaceMessage] = useState("");
@@ -117,6 +126,7 @@ export function CompareWorkspace({
       rowKind: group === "extra" ? "extraAffix" : "itemAffix",
       globalIndependentMultiplierFactor,
       deltas: candidateContextDeltas,
+      customContext,
     });
   };
   const getCandidateItemMultiplierContribution = (
@@ -135,6 +145,7 @@ export function CompareWorkspace({
       rowKind: "itemIndependentMultiplier",
       globalIndependentMultiplierFactor,
       deltas: candidateContextDeltas,
+      customContext,
     });
   };
   const replaceCurrentItem = () => {
@@ -197,6 +208,7 @@ export function CompareWorkspace({
           deltas={quickDeltas}
           onChange={onQuickDeltasChange}
           comparison={comparison}
+          customPanelStats={customPanelStats}
         />
       )}
 
@@ -236,6 +248,7 @@ export function CompareWorkspace({
                 capstoneBonus={baseInputs.capstoneBonus}
                 greaterAffixBonus={baseInputs.greaterAffixBonus}
                 title={t.equipment.affixes}
+                customPanelStats={customPanelStats}
               />
             </div>
           </div>
@@ -251,6 +264,8 @@ export function CompareWorkspace({
               contributionHelp={t.candidate.candidateContributionHelp}
               capstoneDeltas={candidateContextDeltas}
               globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
+              customPanelStats={customPanelStats}
+              customContext={customContext}
               getAffixContribution={getCandidateAffixContribution}
               getItemIndependentContribution={getCandidateItemMultiplierContribution}
             />
@@ -331,12 +346,16 @@ function ManualChangesEditor({
   deltas,
   onChange,
   comparison,
+  customPanelStats,
 }: {
   t: Translation;
   deltas: DeltaRow[];
   onChange: (deltas: DeltaRow[]) => void;
   comparison: ComparisonBreakdown | null;
+  customPanelStats: CustomPanelStat[];
 }) {
+  const affixOptions = buildAffixOptions(t, customPanelStats);
+
   return (
     <section className="panel flatPanel">
       <div className="panelHeader">
@@ -362,20 +381,25 @@ function ManualChangesEditor({
         {deltas.map((delta) => (
           <div className="deltaRow" key={delta.id}>
             <select
-              value={delta.type}
-              onChange={(event) =>
+              value={encodeAffixOption(delta.type, delta.customStatId)}
+              onChange={(event) => {
+                const parsed = parseAffixOption(event.target.value);
                 onChange(
                   deltas.map((current) =>
                     current.id === delta.id
-                      ? { ...current, type: event.target.value as AffixType }
+                      ? {
+                          ...current,
+                          type: parsed.type,
+                          customStatId: parsed.customStatId,
+                        }
                       : current,
                   ),
-                )
-              }
+                );
+              }}
             >
-              {AFFIX_TYPES.map((type) => (
-                <option value={type} key={type}>
-                  {t.affix.inputTypes[type]}
+              {affixOptions.map((option) => (
+                <option value={option.value} key={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

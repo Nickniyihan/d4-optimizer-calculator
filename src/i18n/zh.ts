@@ -115,6 +115,12 @@ export const zh: TranslationShape<typeof en> = {
       "贡献 = 概率 x 加法系数 x 暴击倍率 x 易伤倍率。期望战斗系数等于所有状态贡献之和。",
     conditionalAdditiveNote:
       "+暴击伤害和 +易伤伤害不是独立乘区；它们会在对应状态下加入“加法系数”。例如“暴击 / 易伤”状态会同时吃到普通加法、+暴击伤害和 +易伤伤害。",
+    customPanelStatHelpShort:
+      "自定义面板值 = 基础值 + 装备词条总和 × 词条有效系数。",
+    customIndependentMultiplierHelp:
+      "自定义独立乘区来自自定义伤害规则中输出类型为“独立乘区”的规则，按 ∏(1 + 规则增伤%) 连乘。",
+    customDamageRuleBucketHelp:
+      "自定义伤害规则可以把自定义面板值转换为普通加法伤害、+暴击伤害、+易伤伤害或独立乘区。加法类输出会并入对应加法桶；独立乘区会作为单独乘区显示。",
     sourceQuickDelta: "来源：手动改动",
     sourceCandidateItem: "来源：候选装备",
     sourceManualChanges: "来源：手动改动",
@@ -181,6 +187,37 @@ export const zh: TranslationShape<typeof en> = {
       "关闭后，全局独立乘区不会参与伤害指数计算，但表格内容会保留。",
     globalIndependentMultiplierSummary:
       "全局独立乘区：{count} 项，合计 x{factor}",
+    customPanelStats: "自定义面板值",
+    customPanelStatsHelp:
+      "用于定义由装备词条累积得到的自定义面板值，例如怒气上限。最终值 = 基础值 + 装备词条总和 × 词条有效系数。",
+    addCustomPanelStat: "添加自定义面板值",
+    customPanelStat: "自定义面板值",
+    affixLabel: "词条名称",
+    baseValue: "基础值",
+    affixValueScale: "词条有效系数",
+    finalValue: "最终值",
+    customDamageRules: "自定义伤害规则",
+    customDamageRulesHelp:
+      "用于把自定义面板值转换成伤害收益。例如拉玛兰迪：每点怒气上限提供 0.5% 独立乘区伤害。",
+    addCustomDamageRule: "添加自定义伤害规则",
+    sourceCustomStat: "来源面板值",
+    damagePerPoint: "每点增伤",
+    outputType: "输出类型",
+    currentEffect: "当前效果",
+    outputGenericAdditive: "普通加法伤害",
+    outputCritDamageAdditive: "+暴击伤害",
+    outputVulnerableDamageAdditive: "+易伤伤害",
+    outputIndependentMultiplier: "独立乘区",
+    customIndependentMultiplier: "自定义独立乘区",
+    customPanelStatHelpShort:
+      "自定义面板值 = 基础值 + 装备词条总和 × 词条有效系数。",
+    customIndependentMultiplierHelp:
+      "自定义独立乘区来自自定义伤害规则中输出类型为“独立乘区”的规则，按 ∏(1 + 规则增伤%) 连乘。",
+    customDamageRuleBucketHelp:
+      "自定义伤害规则可以把自定义面板值转换为普通加法伤害、+暴击伤害、+易伤伤害或独立乘区。加法类输出会并入对应加法桶；独立乘区会作为单独乘区显示。",
+    invalidCustomStat: "无效自定义面板值",
+    customAffixFallback: "自定义词条",
+    customStatReferenceLabel: "{label}参考值",
     addGlobalMultiplier: "添加全局乘区",
     globalMultiplier: "全局独立乘区",
     enabled: "启用",
@@ -294,6 +331,8 @@ export const zh: TranslationShape<typeof en> = {
     moreAffixes: "+{count} 条",
     selectAffix: "选择词条",
     capstoneGainComparison: "精造收益比较",
+    recommendedCapstoneAffix: "精造推荐词条",
+    currentSelectedCapstoneAffix: "当前精造词条",
     capstoneGainComparisonHelp:
       "固定当前品质，比较精造命中不同词条时，相对不选择精造词条的总伤害收益。",
     capstoneAffix: "精造词条",
@@ -342,6 +381,7 @@ export const zh: TranslationShape<typeof en> = {
       vulnerableDamageAdditive: "+易伤伤害",
       skillRanks: "+技能等级",
       weaponDamage: "武器伤害",
+      customStat: "自定义词条",
     },
     inputTypes: {
       critChance: "暴击率 (%)",
@@ -354,6 +394,7 @@ export const zh: TranslationShape<typeof en> = {
       vulnerableDamageAdditive: "+易伤伤害 (%)",
       skillRanks: "+技能等级",
       weaponDamage: "武器伤害",
+      customStat: "自定义词条",
     },
   },
   totals: {
@@ -377,6 +418,7 @@ export const zh: TranslationShape<typeof en> = {
     skillDamageFactor: "技能伤害系数",
     globalIndependentMultiplierFactor: "全局独立乘区",
     equipmentIndependentMultiplierFactor: "装备独立乘区",
+    customIndependentMultiplierFactor: "自定义独立乘区",
     mainStatFactor: "主属性系数",
     critFactor: "暴击系数",
     vulnerableFactor: "易伤系数",
@@ -398,6 +440,8 @@ export const zh: TranslationShape<typeof en> = {
         "全局独立乘区 = 所有启用全局乘区的连乘。每一行按 1 + 增幅% 计算。它会放大伤害指数，但如果当前和变更后都相同，通常不影响百分比收益。",
       equipmentIndependentMultiplierFactor:
         "装备独立乘区 = 所有启用装备上的“独立乘区 / 威能”连乘。每一行按 1 + 增幅% 计算。候选装备比较时，被替换装备的这些乘区也会一起替换。",
+      customIndependentMultiplierFactor:
+        "自定义独立乘区来自自定义伤害规则中输出类型为“独立乘区”的规则，按 ∏(1 + 规则增伤%) 连乘。",
       critFactor:
         "（参考）(1 - 总暴击率) + 总暴击率 * 基础暴击倍率 * (1 + 总x暴击伤害增倍)",
       vulnerableFactor:

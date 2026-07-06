@@ -1,10 +1,10 @@
 import { useState } from "react";
 import {
   Affix,
-  AFFIX_TYPES,
   AffixGroup,
-  AffixType,
   BaseInputs,
+  CustomCalculationContext,
+  CustomPanelStat,
   DeltaRow,
   EquipmentItem,
   ItemIndependentMultiplier,
@@ -29,6 +29,12 @@ import {
   inputValueForAffix,
   valueFromAffixInput,
 } from "./format";
+import {
+  buildAffixOptions,
+  encodeAffixOption,
+  getAffixDisplayLabel,
+  parseAffixOption,
+} from "./affixOptions";
 
 interface EquipmentSimulationEditorProps {
   t: Translation;
@@ -40,6 +46,8 @@ interface EquipmentSimulationEditorProps {
   contributionHelp?: string;
   capstoneDeltas?: DeltaRow[];
   globalIndependentMultiplierFactor?: number;
+  customPanelStats?: CustomPanelStat[];
+  customContext?: CustomCalculationContext;
   getAffixContribution?: (affix: Affix, group: AffixGroup) => number;
   getItemIndependentContribution?: (
     multiplier: ItemIndependentMultiplier,
@@ -56,10 +64,25 @@ export function EquipmentSimulationEditor({
   contributionHelp,
   capstoneDeltas = [],
   globalIndependentMultiplierFactor = 1,
+  customPanelStats = [],
+  customContext,
   getAffixContribution,
   getItemIndependentContribution,
 }: EquipmentSimulationEditorProps) {
   const [isEditingRaw, setIsEditingRaw] = useState(false);
+  const capstoneGainRows =
+    baseInputs && equipment
+      ? calculateCapstoneGainRows({
+          item,
+          equipment,
+          baseInputs,
+          capstoneBonus,
+          deltas: capstoneDeltas,
+          globalIndependentMultiplierFactor,
+          customContext,
+        })
+      : [];
+  const recommendedCapstoneAffixId = capstoneGainRows[0]?.affix.id ?? null;
 
   return (
     <section className="selectedEditor">
@@ -118,8 +141,11 @@ export function EquipmentSimulationEditor({
         baseInputs={baseInputs}
         equipment={equipment}
         contributionHelp={contributionHelp}
+        customPanelStats={customPanelStats}
+        recommendedCapstoneAffixId={recommendedCapstoneAffixId}
         getAffixContribution={getAffixContribution}
         getItemIndependentContribution={getItemIndependentContribution}
+        customContext={customContext}
         onAffixGreaterChange={(affixId, isGreaterAffix) =>
           onChange({
             ...item,
@@ -146,11 +172,8 @@ export function EquipmentSimulationEditor({
         <CapstoneGainComparison
           t={t}
           item={item}
-          equipment={equipment}
-          baseInputs={baseInputs}
-          capstoneBonus={capstoneBonus}
-          deltas={capstoneDeltas}
-          globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
+          rows={capstoneGainRows}
+          customPanelStats={customPanelStats}
         />
       )}
 
@@ -163,6 +186,7 @@ export function EquipmentSimulationEditor({
             onChange(nextItem);
             setIsEditingRaw(false);
           }}
+          customPanelStats={customPanelStats}
         />
       )}
     </section>
@@ -175,6 +199,8 @@ function AffixSimulationTable({
   capstoneBonus,
   baseInputs,
   equipment,
+  customPanelStats,
+  recommendedCapstoneAffixId,
   onTargetCapstoneChange,
   onMoveAffix,
   onMoveExtraAffix,
@@ -183,17 +209,21 @@ function AffixSimulationTable({
   contributionHelp,
   getAffixContribution,
   getItemIndependentContribution,
+  customContext,
 }: {
   t: Translation;
   item: EquipmentItem;
   capstoneBonus: number;
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
+  customPanelStats: CustomPanelStat[];
+  recommendedCapstoneAffixId?: string | null;
   contributionHelp?: string;
   getAffixContribution?: (affix: Affix, group: AffixGroup) => number;
   getItemIndependentContribution?: (
     multiplier: ItemIndependentMultiplier,
   ) => number;
+  customContext?: CustomCalculationContext;
   onTargetCapstoneChange: (affixId: string | null) => void;
   onMoveAffix: (affixId: string, direction: "up" | "down") => void;
   onMoveExtraAffix: (affixId: string, direction: "up" | "down") => void;
@@ -244,56 +274,87 @@ function AffixSimulationTable({
             <span />
             <span />
           </div>
-          {meaningfulAffixes.map((affix, index) => (
-            <div className="affixValueRow" key={affix.id}>
-              <label className="radioOnly">
-                <input
-                  type="radio"
-                  name={`target-capstone-${item.id}`}
-                  checked={item.targetCapstoneAffixId === affix.id}
-                  onChange={() => onTargetCapstoneChange(affix.id)}
-                />
-                <span className="srOnly">{t.equipment.capstone}</span>
-              </label>
-              <GreaterAffixStar
-                t={t}
-                active={affix.isGreaterAffix === true}
-                onToggle={() =>
-                  onAffixGreaterChange(affix.id, affix.isGreaterAffix !== true)
+          {meaningfulAffixes.map((affix, index) => {
+            const isRecommendedCapstone =
+              affix.id === recommendedCapstoneAffixId;
+            const isSelectedCapstone = item.targetCapstoneAffixId === affix.id;
+
+            return (
+              <div
+                className={
+                  isRecommendedCapstone
+                    ? "affixValueRow recommendedCapstoneRow"
+                    : "affixValueRow"
                 }
-              />
-              <span className="truncate" title={t.affix.types[affix.type]}>
-                {t.affix.types[affix.type]}
-              </span>
-              <strong>
-                {formatBucketValue(
-                  affix.type,
-                  getEffectiveAffixValue(
-                    item,
-                    affix,
-                    "item",
-                    capstoneBonus,
-                    baseInputs?.greaterAffixBonus,
-                  ),
-                )}
-              </strong>
-              <AffixContribution
-                baseInputs={baseInputs}
-                equipment={equipment}
-                item={item}
-                affix={affix}
-                group="item"
-                getContribution={getAffixContribution}
-              />
-              <AffixOrderControls
-                t={t}
-                canMoveUp={index > 0}
-                canMoveDown={index < meaningfulAffixes.length - 1}
-                onMoveUp={() => onMoveAffix(affix.id, "up")}
-                onMoveDown={() => onMoveAffix(affix.id, "down")}
-              />
-            </div>
-          ))}
+                key={affix.id}
+                title={
+                  isRecommendedCapstone
+                    ? t.equipment.recommendedCapstoneAffix
+                    : undefined
+                }
+              >
+                <label className="radioOnly">
+                  <input
+                    type="radio"
+                    name={`target-capstone-${item.id}`}
+                    checked={isSelectedCapstone}
+                    onChange={() => onTargetCapstoneChange(affix.id)}
+                  />
+                  <span className="srOnly">{t.equipment.capstone}</span>
+                </label>
+                <GreaterAffixStar
+                  t={t}
+                  active={affix.isGreaterAffix === true}
+                  onToggle={() =>
+                    onAffixGreaterChange(affix.id, affix.isGreaterAffix !== true)
+                  }
+                />
+                <span
+                  className="truncate"
+                  title={getAffixDisplayLabel(t, affix, customPanelStats)}
+                >
+                  {getAffixDisplayLabel(t, affix, customPanelStats)}
+                </span>
+                <strong
+                  className={
+                    isSelectedCapstone ? "selectedCapstoneValue" : undefined
+                  }
+                  title={
+                    isSelectedCapstone
+                      ? t.equipment.currentSelectedCapstoneAffix
+                      : undefined
+                  }
+                >
+                  {formatBucketValue(
+                    affix.type,
+                    getEffectiveAffixValue(
+                      item,
+                      affix,
+                      "item",
+                      capstoneBonus,
+                      baseInputs?.greaterAffixBonus,
+                    ),
+                  )}
+                </strong>
+                <AffixContribution
+                  baseInputs={baseInputs}
+                  equipment={equipment}
+                  item={item}
+                  affix={affix}
+                  group="item"
+                  getContribution={getAffixContribution}
+                  customContext={customContext}
+                />
+                <AffixOrderControls
+                  t={t}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < meaningfulAffixes.length - 1}
+                  onMoveUp={() => onMoveAffix(affix.id, "up")}
+                  onMoveDown={() => onMoveAffix(affix.id, "down")}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -313,8 +374,11 @@ function AffixSimulationTable({
           </div>
           {meaningfulExtraAffixes.map((affix, index) => (
             <div className="affixValueRow extraAffixValueRow" key={affix.id}>
-              <span className="truncate" title={t.affix.types[affix.type]}>
-                {t.affix.types[affix.type]}
+              <span
+                className="truncate"
+                title={getAffixDisplayLabel(t, affix, customPanelStats)}
+              >
+                {getAffixDisplayLabel(t, affix, customPanelStats)}
               </span>
               <strong>
                 {formatBucketValue(
@@ -329,6 +393,7 @@ function AffixSimulationTable({
                 affix={affix}
                 group="extra"
                 getContribution={getAffixContribution}
+                customContext={customContext}
               />
               <AffixOrderControls
                 t={t}
@@ -353,6 +418,7 @@ function AffixSimulationTable({
         equipment={equipment}
         contributionHelp={effectiveContributionHelp}
         getContribution={getItemIndependentContribution}
+        customContext={customContext}
         onChange={onItemIndependentMultipliersChange}
       />
     </div>
@@ -367,6 +433,7 @@ function ItemIndependentMultiplierTable({
   equipment,
   contributionHelp,
   getContribution,
+  customContext,
   onChange,
 }: {
   t: Translation;
@@ -376,6 +443,7 @@ function ItemIndependentMultiplierTable({
   equipment?: EquipmentItem[];
   contributionHelp: string;
   getContribution?: (multiplier: ItemIndependentMultiplier) => number;
+  customContext?: CustomCalculationContext;
   onChange: (rows: ItemIndependentMultiplier[]) => void;
 }) {
   const updateRow = (row: ItemIndependentMultiplier) => {
@@ -449,6 +517,7 @@ function ItemIndependentMultiplierTable({
               item={item}
               multiplier={row}
               getContribution={getContribution}
+              customContext={customContext}
             />
             <span className="globalMultiplierActions">
               <button
@@ -562,6 +631,7 @@ function AffixContribution({
   affix,
   group,
   getContribution,
+  customContext,
 }: {
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
@@ -569,6 +639,7 @@ function AffixContribution({
   affix: Affix;
   group: AffixGroup;
   getContribution?: (affix: Affix, group: AffixGroup) => number;
+  customContext?: CustomCalculationContext;
 }) {
   if (!getContribution && (!baseInputs || !equipment)) {
     return <span className="neutral">-</span>;
@@ -582,6 +653,7 @@ function AffixContribution({
         itemId: item.id,
         affixId: affix.id,
         group,
+        customContext,
       });
   const className =
     contribution > 0 ? "positive" : contribution < 0 ? "negative" : "neutral";
@@ -595,12 +667,14 @@ function ItemIndependentContribution({
   item,
   multiplier,
   getContribution,
+  customContext,
 }: {
   baseInputs?: BaseInputs;
   equipment?: EquipmentItem[];
   item: EquipmentItem;
   multiplier: ItemIndependentMultiplier;
   getContribution?: (multiplier: ItemIndependentMultiplier) => number;
+  customContext?: CustomCalculationContext;
 }) {
   if (!getContribution && (!baseInputs || !equipment)) {
     return <span className="neutral">-</span>;
@@ -613,6 +687,7 @@ function ItemIndependentContribution({
         equipment: equipment as EquipmentItem[],
         itemId: item.id,
         multiplierId: multiplier.id,
+        customContext,
       });
   const className =
     contribution > 0 ? "positive" : contribution < 0 ? "negative" : "neutral";
@@ -626,12 +701,14 @@ export function NormalizedAffixValues({
   capstoneBonus,
   greaterAffixBonus,
   title,
+  customPanelStats = [],
 }: {
   t: Translation;
   item: EquipmentItem;
   capstoneBonus: number;
   greaterAffixBonus?: number;
   title: string;
+  customPanelStats?: CustomPanelStat[];
 }) {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
   const meaningfulExtraAffixes = (item.extraAffixes ?? []).filter(
@@ -654,8 +731,11 @@ export function NormalizedAffixValues({
         <ul className="normalizedList">
           {meaningfulAffixes.map((affix) => (
             <li key={affix.id}>
-              <span className="truncate" title={t.affix.types[affix.type]}>
-                {t.affix.types[affix.type]}
+              <span
+                className="truncate"
+                title={getAffixDisplayLabel(t, affix, customPanelStats)}
+              >
+                {getAffixDisplayLabel(t, affix, customPanelStats)}
               </span>
               <strong>
                 {formatBucketValue(
@@ -672,8 +752,12 @@ export function NormalizedAffixValues({
           ))}
           {meaningfulExtraAffixes.map((affix) => (
             <li key={affix.id}>
-              <span className="truncate" title={t.affix.types[affix.type]}>
-                {t.equipment.extra}: {t.affix.types[affix.type]}
+              <span
+                className="truncate"
+                title={getAffixDisplayLabel(t, affix, customPanelStats)}
+              >
+                {t.equipment.extra}:{" "}
+                {getAffixDisplayLabel(t, affix, customPanelStats)}
               </span>
               <strong>
                 {formatBucketValue(
@@ -700,22 +784,78 @@ export function NormalizedAffixValues({
   );
 }
 
-function CapstoneGainComparison({
-  t,
+interface CapstoneGainRow {
+  affix: Affix;
+  value: number;
+  gain: number;
+  isCurrent: boolean;
+}
+
+function calculateCapstoneGainRows({
   item,
   equipment,
   baseInputs,
   capstoneBonus,
   deltas,
   globalIndependentMultiplierFactor,
+  customContext,
 }: {
-  t: Translation;
   item: EquipmentItem;
   equipment: EquipmentItem[];
   baseInputs: BaseInputs;
   capstoneBonus: number;
   deltas: DeltaRow[];
   globalIndependentMultiplierFactor: number;
+  customContext?: CustomCalculationContext;
+}): CapstoneGainRow[] {
+  const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
+  const baselineItem = { ...item, targetCapstoneAffixId: null };
+  const baseline = calculateEquipmentSetupBreakdown({
+    baseInputs,
+    equipment: replaceEquipmentItem(equipment, item.id, baselineItem),
+    globalIndependentMultiplierFactor,
+    deltas,
+    customContext,
+  }).totalDamageFactor;
+
+  return meaningfulAffixes
+    .map((affix, index) => {
+      const simulatedItem = { ...item, targetCapstoneAffixId: affix.id };
+      const after = calculateEquipmentSetupBreakdown({
+        baseInputs,
+        equipment: replaceEquipmentItem(equipment, item.id, simulatedItem),
+        globalIndependentMultiplierFactor,
+        deltas,
+        customContext,
+      }).totalDamageFactor;
+
+      return {
+        affix,
+        index,
+        value: normalizeEquipmentAffix(
+          simulatedItem,
+          affix,
+          capstoneBonus,
+          baseInputs.greaterAffixBonus,
+        ),
+        gain: relativeChange(baseline, after),
+        isCurrent: item.targetCapstoneAffixId === affix.id,
+      };
+    })
+    .sort((a, b) => b.gain - a.gain || a.index - b.index)
+    .map(({ index: _index, ...row }) => row);
+}
+
+function CapstoneGainComparison({
+  t,
+  item,
+  rows,
+  customPanelStats,
+}: {
+  t: Translation;
+  item: EquipmentItem;
+  rows: CapstoneGainRow[];
+  customPanelStats: CustomPanelStat[];
 }) {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
 
@@ -728,36 +868,6 @@ function CapstoneGainComparison({
     );
   }
 
-  const baselineItem = { ...item, targetCapstoneAffixId: null };
-  const baseline = calculateEquipmentSetupBreakdown({
-    baseInputs,
-    equipment: replaceEquipmentItem(equipment, item.id, baselineItem),
-    globalIndependentMultiplierFactor,
-    deltas,
-  }).totalDamageFactor;
-  const rows = meaningfulAffixes.map((affix, index) => {
-    const simulatedItem = { ...item, targetCapstoneAffixId: affix.id };
-    const after = calculateEquipmentSetupBreakdown({
-      baseInputs,
-      equipment: replaceEquipmentItem(equipment, item.id, simulatedItem),
-      globalIndependentMultiplierFactor,
-      deltas,
-    }).totalDamageFactor;
-
-    return {
-      affix,
-      index,
-      value: normalizeEquipmentAffix(
-        simulatedItem,
-        affix,
-        capstoneBonus,
-        baseInputs.greaterAffixBonus,
-      ),
-      gain: relativeChange(baseline, after),
-      isCurrent: item.targetCapstoneAffixId === affix.id,
-    };
-  }).sort((a, b) => b.gain - a.gain || a.index - b.index);
-
   return (
     <div className="miniPanel">
       <h3>{t.equipment.capstoneGainComparison}</h3>
@@ -768,17 +878,25 @@ function CapstoneGainComparison({
           <span>{t.equipment.affixValue}</span>
           <span>{t.equipment.totalDamageGain}</span>
         </div>
-        {rows.map((row) => (
+        {rows.map((row, index) => (
           <div
-            className={
-              row.isCurrent
-                ? "capstoneGainRow currentCapstoneRow"
-                : "capstoneGainRow"
-            }
+            className={[
+              "capstoneGainRow",
+              index === 0 ? "recommendedCapstoneRow" : "",
+              row.isCurrent ? "currentCapstoneRow" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             key={row.affix.id}
+            title={
+              index === 0 ? t.equipment.recommendedCapstoneAffix : undefined
+            }
           >
-            <span className="truncate" title={t.affix.types[row.affix.type]}>
-              {t.affix.types[row.affix.type]}
+            <span
+              className="truncate"
+              title={getAffixDisplayLabel(t, row.affix, customPanelStats)}
+            >
+              {getAffixDisplayLabel(t, row.affix, customPanelStats)}
             </span>
             <strong>{formatBucketValue(row.affix.type, row.value)}</strong>
             <strong
@@ -800,13 +918,16 @@ function RawItemEditModal({
   item,
   onCancel,
   onSave,
+  customPanelStats,
 }: {
   t: Translation;
   item: EquipmentItem;
   onCancel: () => void;
   onSave: (item: EquipmentItem) => void;
+  customPanelStats: CustomPanelStat[];
 }) {
   const [draft, setDraft] = useState<EquipmentItem>(item);
+  const affixOptions = buildAffixOptions(t, customPanelStats);
 
   const updateAffix = (affix: Affix) => {
     setDraft({
@@ -935,17 +1056,19 @@ function RawItemEditModal({
                 }
               />
               <select
-                value={affix.type}
-                onChange={(event) =>
+                value={encodeAffixOption(affix.type, affix.customStatId)}
+                onChange={(event) => {
+                  const parsed = parseAffixOption(event.target.value);
                   updateAffix({
                     ...affix,
-                    type: event.target.value as AffixType,
-                  })
-                }
+                    type: parsed.type,
+                    customStatId: parsed.customStatId,
+                  });
+                }}
               >
-                {AFFIX_TYPES.map((type) => (
-                  <option value={type} key={type}>
-                    {t.affix.inputTypes[type]}
+                {affixOptions.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
@@ -988,17 +1111,19 @@ function RawItemEditModal({
           {(draft.extraAffixes ?? []).map((affix) => (
             <div className="rawAffixRow extraRawAffixRow" key={affix.id}>
               <select
-                value={affix.type}
-                onChange={(event) =>
+                value={encodeAffixOption(affix.type, affix.customStatId)}
+                onChange={(event) => {
+                  const parsed = parseAffixOption(event.target.value);
                   updateExtraAffix({
                     ...affix,
-                    type: event.target.value as AffixType,
-                  })
-                }
+                    type: parsed.type,
+                    customStatId: parsed.customStatId,
+                  });
+                }}
               >
-                {AFFIX_TYPES.map((type) => (
-                  <option value={type} key={type}>
-                    {t.affix.inputTypes[type]}
+                {affixOptions.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

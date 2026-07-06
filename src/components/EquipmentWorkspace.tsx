@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { UIEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BaseInputs,
+  CustomCalculationContext,
+  CustomPanelStat,
   EquipmentItem,
   calculateItemIndependentMultiplierFactor,
   createEquipmentItem,
@@ -10,6 +12,7 @@ import { Translation } from "../i18n";
 import { reorderEquipmentItem } from "../lib/equipmentOrder";
 import { duplicateEquipmentItem } from "../lib/presets";
 import { EquipmentSimulationEditor } from "./EquipmentSimulationEditor";
+import { getAffixDisplayLabel } from "./affixOptions";
 import { formatBucketValue, formatNumber } from "./format";
 
 interface EquipmentWorkspaceProps {
@@ -18,6 +21,10 @@ interface EquipmentWorkspaceProps {
   baseInputs: BaseInputs;
   capstoneBonus: number;
   defaultTargetQuality: number;
+  customPanelStats: CustomPanelStat[];
+  customContext: CustomCalculationContext;
+  listScrollTop: number;
+  onListScrollTopChange: (scrollTop: number) => void;
   onChange: (equipment: EquipmentItem[]) => void;
 }
 
@@ -27,9 +34,14 @@ export function EquipmentWorkspace({
   baseInputs,
   capstoneBonus,
   defaultTargetQuality,
+  customPanelStats,
+  customContext,
+  listScrollTop,
+  onListScrollTopChange,
   onChange,
 }: EquipmentWorkspaceProps) {
   const [selectedItemId, setSelectedItemId] = useState(equipment[0]?.id ?? "");
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!equipment.some((item) => item.id === selectedItemId)) {
@@ -39,6 +51,19 @@ export function EquipmentWorkspace({
 
   const selectedItem =
     equipment.find((item) => item.id === selectedItemId) ?? equipment[0];
+  const handleListScroll = (event: UIEvent<HTMLDivElement>) => {
+    onListScrollTopChange(event.currentTarget.scrollTop);
+  };
+
+  useLayoutEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      if (listRef.current) {
+        listRef.current.scrollTop = listScrollTop;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [equipment.length]);
 
   return (
     <section className="equipmentWorkspace">
@@ -61,13 +86,18 @@ export function EquipmentWorkspace({
           </button>
         </div>
 
-        <div className="equipmentList">
+        <div
+          className="equipmentList"
+          ref={listRef}
+          onScroll={handleListScroll}
+        >
           {equipment.map((item, index) => {
             const previewLines = summarizeAffixes(
               t,
               item,
               capstoneBonus,
               baseInputs.greaterAffixBonus,
+              customPanelStats,
             );
 
             return (
@@ -158,6 +188,8 @@ export function EquipmentWorkspace({
               capstoneBonus={capstoneBonus}
               baseInputs={baseInputs}
               equipment={equipment}
+              customPanelStats={customPanelStats}
+              customContext={customContext}
               onChange={(nextItem) =>
                 onChange(
                   equipment.map((item) =>
@@ -203,6 +235,7 @@ function summarizeAffixes(
   item: EquipmentItem,
   capstoneBonus: number,
   greaterAffixBonus: number,
+  customPanelStats: CustomPanelStat[],
 ): string[] {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
   const meaningfulExtraAffixes = (item.extraAffixes ?? []).filter(
@@ -221,7 +254,7 @@ function summarizeAffixes(
   }
 
   const previewAffixes = meaningfulAffixes.slice(0, 4).map((affix) =>
-    `${t.affix.types[affix.type]} ${formatBucketValue(
+    `${getAffixDisplayLabel(t, affix, customPanelStats)} ${formatBucketValue(
       affix.type,
       normalizeEquipmentAffix(item, affix, capstoneBonus, greaterAffixBonus),
     )}`,
@@ -241,7 +274,10 @@ function summarizeAffixes(
 
   if (meaningfulExtraAffixes.length > 0) {
     const extraPreview = meaningfulExtraAffixes.slice(0, 2).map((affix) =>
-      `${t.affix.types[affix.type]} ${formatBucketValue(affix.type, affix.value)}`,
+      `${getAffixDisplayLabel(t, affix, customPanelStats)} ${formatBucketValue(
+        affix.type,
+        affix.value,
+      )}`,
     );
     previewLines.push(`${t.equipment.extra}: ${extraPreview.join(" · ")}`);
   }

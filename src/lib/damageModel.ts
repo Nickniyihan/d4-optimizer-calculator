@@ -1,6 +1,6 @@
 export const APP_VERSION = 1;
 
-export type AffixType =
+export type BuiltInAffixType =
   | "critChance"
   | "mainStat"
   | "critDamageMultiplier"
@@ -11,6 +11,8 @@ export type AffixType =
   | "vulnerableDamageAdditive"
   | "skillRanks"
   | "weaponDamage";
+
+export type AffixType = BuiltInAffixType | "customStat";
 
 export interface BaseInputs {
   baseCritChance: number;
@@ -41,6 +43,7 @@ export interface BaseInputs {
 export interface Affix {
   id: string;
   type: AffixType;
+  customStatId?: string;
   value: number;
   isGreaterAffix?: boolean;
 }
@@ -85,6 +88,68 @@ export interface GearTotals {
   gearWeaponDamage: number;
 }
 
+export interface CustomPanelStat {
+  id: string;
+  enabled: boolean;
+  name: string;
+  affixLabel: string;
+  baseValue: number;
+  affixValueScale: number;
+}
+
+export type CustomDamageRuleOutput =
+  | "genericAdditive"
+  | "critDamageAdditive"
+  | "vulnerableDamageAdditive"
+  | "independentMultiplier";
+
+export interface CustomDamageRule {
+  id: string;
+  enabled: boolean;
+  name: string;
+  sourceCustomStatId: string;
+  percentPerPoint: number;
+  output: CustomDamageRuleOutput;
+}
+
+export interface CustomPanelStatBreakdown {
+  id: string;
+  enabled: boolean;
+  name: string;
+  affixLabel: string;
+  baseValue: number;
+  affixValueScale: number;
+  effectiveAffixTotal: number;
+  finalValue: number;
+}
+
+export interface CustomDamageRuleBreakdown {
+  id: string;
+  enabled: boolean;
+  name: string;
+  sourceCustomStatId: string;
+  sourceValue: number;
+  percentPerPoint: number;
+  rulePercent: number;
+  output: CustomDamageRuleOutput;
+  effectFactor: number;
+}
+
+export interface CustomRuleOutputs {
+  genericAdditive: number;
+  critDamageAdditive: number;
+  vulnerableDamageAdditive: number;
+  independentMultiplierFactor: number;
+  rules: CustomDamageRuleBreakdown[];
+}
+
+export interface CustomCalculationContext {
+  customPanelStats?: CustomPanelStat[];
+  customDamageRules?: CustomDamageRule[];
+  customAffixTotals?: Record<string, number>;
+  customStatReferenceValues?: Record<string, number>;
+}
+
 export interface StateBreakdown {
   crit: boolean;
   vulnerable: boolean;
@@ -105,6 +170,7 @@ export interface DamageBreakdown {
   skillDamageFactor: number;
   globalIndependentMultiplierFactor: number;
   equipmentIndependentMultiplierFactor: number;
+  customIndependentMultiplierFactor: number;
   expectedCombatFactor: number;
   totalDamageFactor: number;
   damageBase: number;
@@ -123,6 +189,11 @@ export interface DamageBreakdown {
   totalCritDamageAdditive: number;
   totalVulnerableDamageAdditive: number;
   totalGenericAdditive: number;
+  customGenericAdditive: number;
+  customCritDamageAdditive: number;
+  customVulnerableDamageAdditive: number;
+  customPanelStats: CustomPanelStatBreakdown[];
+  customDamageRules: CustomDamageRuleBreakdown[];
   stateBreakdown: StateBreakdown[];
   gearTotals: GearTotals;
 }
@@ -130,6 +201,7 @@ export interface DamageBreakdown {
 export interface DeltaRow {
   id: string;
   type: AffixType;
+  customStatId?: string;
   value: number;
 }
 
@@ -152,6 +224,9 @@ export interface AppState {
   equipment: EquipmentItem[];
   quickDeltas: DeltaRow[];
   typicalRolls: TypicalRolls;
+  customStatReferenceValues: Record<string, number>;
+  customPanelStats: CustomPanelStat[];
+  customDamageRules: CustomDamageRule[];
   includeGlobalIndependentMultipliers: boolean;
   globalIndependentMultipliers: GlobalIndependentMultiplier[];
 }
@@ -187,6 +262,7 @@ export interface ComparisonBreakdown {
     skillDamageFactor: FactorChange;
     globalIndependentMultiplierFactor: FactorChange;
     equipmentIndependentMultiplierFactor: FactorChange;
+    customIndependentMultiplierFactor: FactorChange;
     expectedCombatFactor: FactorChange;
     totalDamageFactor: FactorChange;
   };
@@ -194,6 +270,7 @@ export interface ComparisonBreakdown {
 
 export interface MarginalGain {
   type: AffixType;
+  customStatId?: string;
   delta: number;
   relativeChange: number;
   currentBucketTotal: number;
@@ -216,6 +293,7 @@ export interface CandidateContributionParams {
   rowKind: CandidateContributionRowKind;
   globalIndependentMultiplierFactor?: number;
   deltas?: DeltaRow[];
+  customContext?: CustomCalculationContext;
 }
 
 export interface CandidateCapstoneRecommendation {
@@ -225,7 +303,7 @@ export interface CandidateCapstoneRecommendation {
   isCurrent: boolean;
 }
 
-export const AFFIX_TYPES: AffixType[] = [
+export const AFFIX_TYPES: BuiltInAffixType[] = [
   "critChance",
   "mainStat",
   "critDamageMultiplier",
@@ -238,7 +316,7 @@ export const AFFIX_TYPES: AffixType[] = [
   "weaponDamage",
 ];
 
-export const PERCENT_AFFIX_TYPES: AffixType[] = [
+export const PERCENT_AFFIX_TYPES: BuiltInAffixType[] = [
   "critChance",
   "critDamageMultiplier",
   "vulnerableDamageMultiplier",
@@ -248,7 +326,7 @@ export const PERCENT_AFFIX_TYPES: AffixType[] = [
   "vulnerableDamageAdditive",
 ];
 
-export const INTEGER_AFFIX_TYPES: AffixType[] = ["skillRanks"];
+export const INTEGER_AFFIX_TYPES: BuiltInAffixType[] = ["skillRanks"];
 
 export const DEFAULT_BASE_INPUTS: BaseInputs = {
   baseCritChance: 0.7,
@@ -306,11 +384,11 @@ export const DEFAULT_GLOBAL_INDEPENDENT_MULTIPLIERS: GlobalIndependentMultiplier
   [];
 
 export function isPercentAffix(type: AffixType): boolean {
-  return PERCENT_AFFIX_TYPES.includes(type);
+  return type !== "customStat" && PERCENT_AFFIX_TYPES.includes(type);
 }
 
 export function isIntegerAffix(type: AffixType): boolean {
-  return INTEGER_AFFIX_TYPES.includes(type);
+  return type !== "customStat" && INTEGER_AFFIX_TYPES.includes(type);
 }
 
 export function createId(prefix: string): string {
@@ -327,6 +405,30 @@ export function createEmptyAffix(type: AffixType = "critChance"): Affix {
     type,
     value: 0,
     isGreaterAffix: false,
+  };
+}
+
+export function createCustomPanelStat(): CustomPanelStat {
+  return {
+    id: createId("custom-stat"),
+    enabled: true,
+    name: "",
+    affixLabel: "",
+    baseValue: 0,
+    affixValueScale: 1,
+  };
+}
+
+export function createCustomDamageRule(
+  sourceCustomStatId = "",
+): CustomDamageRule {
+  return {
+    id: createId("custom-rule"),
+    enabled: true,
+    name: "",
+    sourceCustomStatId,
+    percentPerPoint: 0,
+    output: "independentMultiplier",
   };
 }
 
@@ -427,6 +529,10 @@ export function aggregateGear(
     }
 
     item.affixes.forEach((affix) => {
+      if (affix.type === "customStat") {
+        return;
+      }
+
       const value = normalizeEquipmentAffix(
         item,
         affix,
@@ -437,6 +543,10 @@ export function aggregateGear(
     });
 
     (item.extraAffixes ?? []).forEach((affix) => {
+      if (affix.type === "customStat") {
+        return;
+      }
+
       addAffixToGearTotals(
         totals,
         affix.type,
@@ -448,6 +558,161 @@ export function aggregateGear(
 
     return totals;
   }, { ...EMPTY_GEAR_TOTALS });
+}
+
+export function aggregateCustomAffixTotals(
+  equipment: EquipmentItem[],
+  baseInputs: BaseInputs,
+  customPanelStats: CustomPanelStat[] = [],
+): Record<string, number> {
+  const enabledStatIds = getEnabledCustomStatIds(customPanelStats);
+  const totals: Record<string, number> = {};
+
+  equipment.forEach((item) => {
+    if (!item.enabled) {
+      return;
+    }
+
+    item.affixes.forEach((affix) => {
+      if (affix.type !== "customStat" || !affix.customStatId) {
+        return;
+      }
+
+      if (!enabledStatIds.has(affix.customStatId)) {
+        return;
+      }
+
+      totals[affix.customStatId] =
+        (totals[affix.customStatId] ?? 0) +
+        normalizeEquipmentAffix(
+          item,
+          affix,
+          baseInputs.capstoneBonus,
+          baseInputs.greaterAffixBonus,
+        );
+    });
+
+    (item.extraAffixes ?? []).forEach((affix) => {
+      if (affix.type !== "customStat" || !affix.customStatId) {
+        return;
+      }
+
+      if (!enabledStatIds.has(affix.customStatId)) {
+        return;
+      }
+
+      totals[affix.customStatId] =
+        (totals[affix.customStatId] ?? 0) + sanitizeNumber(affix.value, 0);
+    });
+  });
+
+  return totals;
+}
+
+export function applyDeltasToCustomAffixTotals(
+  customAffixTotals: Record<string, number>,
+  deltas: DeltaRow[],
+  customPanelStats: CustomPanelStat[] = [],
+): Record<string, number> {
+  const enabledStatIds = getEnabledCustomStatIds(customPanelStats);
+  const nextTotals = { ...customAffixTotals };
+
+  deltas.forEach((delta) => {
+    if (delta.type !== "customStat" || !delta.customStatId) {
+      return;
+    }
+
+    if (!enabledStatIds.has(delta.customStatId)) {
+      return;
+    }
+
+    nextTotals[delta.customStatId] =
+      (nextTotals[delta.customStatId] ?? 0) + sanitizeNumber(delta.value, 0);
+  });
+
+  return nextTotals;
+}
+
+export function calculateCustomPanelStatBreakdowns(
+  customPanelStats: CustomPanelStat[] = [],
+  customAffixTotals: Record<string, number> = {},
+): CustomPanelStatBreakdown[] {
+  return customPanelStats.map((stat) => {
+    const baseValue = sanitizeNumber(stat.baseValue, 0);
+    const affixValueScale = sanitizeFiniteOrDefault(stat.affixValueScale, 1);
+    const effectiveAffixTotal = sanitizeNumber(customAffixTotals[stat.id], 0);
+
+    return {
+      id: stat.id,
+      enabled: stat.enabled !== false,
+      name: stat.name ?? "",
+      affixLabel: stat.affixLabel ?? "",
+      baseValue,
+      affixValueScale,
+      effectiveAffixTotal,
+      finalValue:
+        stat.enabled === false
+          ? baseValue
+          : baseValue + effectiveAffixTotal * affixValueScale,
+    };
+  });
+}
+
+export function calculateCustomRuleOutputs(
+  customDamageRules: CustomDamageRule[] = [],
+  customPanelStats: CustomPanelStatBreakdown[] = [],
+): CustomRuleOutputs {
+  const statById = new Map(
+    customPanelStats
+      .filter((stat) => stat.enabled)
+      .map((stat) => [stat.id, stat] as const),
+  );
+
+  return customDamageRules.reduce<CustomRuleOutputs>(
+    (outputs, rule) => {
+      const sourceStat = statById.get(rule.sourceCustomStatId);
+
+      if (rule.enabled === false || !sourceStat) {
+        return outputs;
+      }
+
+      const percentPerPoint = sanitizeNumber(rule.percentPerPoint, 0);
+      const sourceValue = sanitizeNumber(sourceStat.finalValue, 0);
+      const rulePercent = sourceValue * percentPerPoint;
+      const effectFactor = sanitizeMultiplierFactor(1 + rulePercent / 100);
+      const breakdown: CustomDamageRuleBreakdown = {
+        id: rule.id,
+        enabled: true,
+        name: rule.name ?? "",
+        sourceCustomStatId: rule.sourceCustomStatId,
+        sourceValue,
+        percentPerPoint,
+        rulePercent,
+        output: rule.output,
+        effectFactor,
+      };
+
+      outputs.rules.push(breakdown);
+
+      switch (rule.output) {
+        case "genericAdditive":
+          outputs.genericAdditive += rulePercent / 100;
+          break;
+        case "critDamageAdditive":
+          outputs.critDamageAdditive += rulePercent / 100;
+          break;
+        case "vulnerableDamageAdditive":
+          outputs.vulnerableDamageAdditive += rulePercent / 100;
+          break;
+        case "independentMultiplier":
+          outputs.independentMultiplierFactor *= effectFactor;
+          break;
+      }
+
+      return outputs;
+    },
+    createEmptyCustomRuleOutputs(),
+  );
 }
 
 export function getEffectiveAffixValue(
@@ -470,14 +735,21 @@ export function calculateEquipmentAffixContribution({
   itemId,
   affixId,
   group,
+  customContext,
 }: {
   baseInputs: BaseInputs;
   equipment: EquipmentItem[];
   itemId: string;
   affixId: string;
   group: AffixGroup;
+  customContext?: CustomCalculationContext;
 }): number {
-  const current = calculateEquipmentBreakdown(baseInputs, equipment).totalDamageFactor;
+  const current = calculateEquipmentBreakdown(
+    baseInputs,
+    equipment,
+    1,
+    customContext,
+  ).totalDamageFactor;
   const withoutAffix = equipment.map((item) => {
     if (item.id !== itemId) {
       return item;
@@ -504,6 +776,8 @@ export function calculateEquipmentAffixContribution({
   const without = calculateEquipmentBreakdown(
     baseInputs,
     withoutAffix,
+    1,
+    customContext,
   ).totalDamageFactor;
 
   return relativeChange(without, current);
@@ -514,13 +788,20 @@ export function calculateItemIndependentMultiplierContribution({
   equipment,
   itemId,
   multiplierId,
+  customContext,
 }: {
   baseInputs: BaseInputs;
   equipment: EquipmentItem[];
   itemId: string;
   multiplierId: string;
+  customContext?: CustomCalculationContext;
 }): number {
-  const current = calculateEquipmentBreakdown(baseInputs, equipment).totalDamageFactor;
+  const current = calculateEquipmentBreakdown(
+    baseInputs,
+    equipment,
+    1,
+    customContext,
+  ).totalDamageFactor;
   const withoutMultiplier = equipment.map((item) => {
     if (item.id !== itemId) {
       return item;
@@ -536,6 +817,8 @@ export function calculateItemIndependentMultiplierContribution({
   const without = calculateEquipmentBreakdown(
     baseInputs,
     withoutMultiplier,
+    1,
+    customContext,
   ).totalDamageFactor;
 
   return relativeChange(without, current);
@@ -556,25 +839,39 @@ export function calculateEquipmentSetupBreakdown({
   equipment,
   globalIndependentMultiplierFactor = 1,
   deltas = [],
+  customContext,
 }: {
   baseInputs: BaseInputs;
   equipment: EquipmentItem[];
   globalIndependentMultiplierFactor?: number;
   deltas?: DeltaRow[];
+  customContext?: CustomCalculationContext;
 }): DamageBreakdown {
   if (deltas.length === 0) {
     return calculateEquipmentBreakdown(
       baseInputs,
       equipment,
       globalIndependentMultiplierFactor,
+      customContext,
     );
   }
+
+  const customPanelStats = customContext?.customPanelStats ?? [];
+  const customAffixTotals = applyDeltasToCustomAffixTotals(
+    aggregateCustomAffixTotals(equipment, baseInputs, customPanelStats),
+    deltas,
+    customPanelStats,
+  );
 
   return calculateDamageBreakdown(
     baseInputs,
     applyDeltasToGearTotals(aggregateGear(equipment, baseInputs), deltas),
     globalIndependentMultiplierFactor,
     calculateEquipmentIndependentMultiplierFactor(equipment),
+    {
+      ...customContext,
+      customAffixTotals,
+    },
   );
 }
 
@@ -587,6 +884,7 @@ export function calculateCandidateRowContribution({
   rowKind,
   globalIndependentMultiplierFactor = 1,
   deltas = [],
+  customContext,
 }: CandidateContributionParams): number {
   const replacementEquipment = buildCandidateReplacementEquipment(
     equipment,
@@ -598,6 +896,7 @@ export function calculateCandidateRowContribution({
     equipment: replacementEquipment,
     globalIndependentMultiplierFactor,
     deltas,
+    customContext,
   }).totalDamageFactor;
   const candidateWithoutRow = removeCandidateRow(candidate, rowId, rowKind);
   const withoutEquipment = buildCandidateReplacementEquipment(
@@ -610,6 +909,7 @@ export function calculateCandidateRowContribution({
     equipment: withoutEquipment,
     globalIndependentMultiplierFactor,
     deltas,
+    customContext,
   }).totalDamageFactor;
 
   return relativeChange(without, current);
@@ -622,6 +922,7 @@ export function calculateCandidateCapstoneRecommendations({
   candidate,
   globalIndependentMultiplierFactor = 1,
   deltas = [],
+  customContext,
 }: {
   baseInputs: BaseInputs;
   equipment: EquipmentItem[];
@@ -629,6 +930,7 @@ export function calculateCandidateCapstoneRecommendations({
   candidate: EquipmentItem;
   globalIndependentMultiplierFactor?: number;
   deltas?: DeltaRow[];
+  customContext?: CustomCalculationContext;
 }): CandidateCapstoneRecommendation[] {
   const candidateWithoutCapstone = { ...candidate, targetCapstoneAffixId: null };
   const baselineEquipment = buildCandidateReplacementEquipment(
@@ -641,6 +943,7 @@ export function calculateCandidateCapstoneRecommendations({
     equipment: baselineEquipment,
     globalIndependentMultiplierFactor,
     deltas,
+    customContext,
   }).totalDamageFactor;
 
   return candidate.affixes
@@ -656,6 +959,7 @@ export function calculateCandidateCapstoneRecommendations({
         equipment: simulatedEquipment,
         globalIndependentMultiplierFactor,
         deltas,
+        customContext,
       }).totalDamageFactor;
 
       return {
@@ -736,6 +1040,8 @@ export function addAffixToGearTotals(
   value: number,
 ): GearTotals {
   switch (type) {
+    case "customStat":
+      break;
     case "critChance":
       totals.gearCritChance += value;
       break;
@@ -776,7 +1082,16 @@ export function calculateDamageBreakdown(
   gearTotals: GearTotals,
   globalIndependentMultiplierFactor = 1,
   equipmentIndependentMultiplierFactor = 1,
+  customContext: CustomCalculationContext = {},
 ): DamageBreakdown {
+  const customPanelStats = calculateCustomPanelStatBreakdowns(
+    customContext.customPanelStats,
+    customContext.customAffixTotals,
+  );
+  const customRuleOutputs = calculateCustomRuleOutputs(
+    customContext.customDamageRules,
+    customPanelStats,
+  );
   const totalCritChance = clamp(
     baseInputs.baseCritChance + gearTotals.gearCritChance,
     0,
@@ -785,7 +1100,9 @@ export function calculateDamageBreakdown(
   const vulnerableUptime = clamp(baseInputs.vulnerableUptime, 0, 1);
   const totalMainStat = baseInputs.baseMainStat + gearTotals.gearMainStat;
   const totalGenericAdditive =
-    baseInputs.baseAdditivePool + gearTotals.gearAdditiveDamage;
+    baseInputs.baseAdditivePool +
+    gearTotals.gearAdditiveDamage +
+    customRuleOutputs.genericAdditive;
   const totalAdditivePool = totalGenericAdditive;
   const totalCritDamageMultiplier =
     baseInputs.baseCritDamageMultiplier + gearTotals.gearCritDamageMultiplier;
@@ -793,10 +1110,13 @@ export function calculateDamageBreakdown(
     baseInputs.baseVulnerableDamageMultiplier +
     gearTotals.gearVulnerableDamageMultiplier;
   const totalCritDamageAdditive =
-    baseInputs.baseCritDamageAdditive + gearTotals.gearCritDamageAdditive;
+    baseInputs.baseCritDamageAdditive +
+    gearTotals.gearCritDamageAdditive +
+    customRuleOutputs.critDamageAdditive;
   const totalVulnerableDamageAdditive =
     baseInputs.baseVulnerableDamageAdditive +
-    gearTotals.gearVulnerableDamageAdditive;
+    gearTotals.gearVulnerableDamageAdditive +
+    customRuleOutputs.vulnerableDamageAdditive;
   const baseAverageWeaponDamage = getBaseAverageWeaponDamage(baseInputs);
   const effectiveWeaponDamage =
     baseAverageWeaponDamage + gearTotals.gearWeaponDamage;
@@ -856,6 +1176,9 @@ export function calculateDamageBreakdown(
     sanitizeMultiplierFactor(globalIndependentMultiplierFactor);
   const safeEquipmentIndependentMultiplierFactor =
     sanitizeMultiplierFactor(equipmentIndependentMultiplierFactor);
+  const safeCustomIndependentMultiplierFactor = sanitizeMultiplierFactor(
+    customRuleOutputs.independentMultiplierFactor,
+  );
   const totalDamageFactor =
     damageBase *
     skillDamageFactor *
@@ -863,7 +1186,8 @@ export function calculateDamageBreakdown(
     typeAllMultiplierFactor *
     expectedCombatFactor *
     safeGlobalIndependentMultiplierFactor *
-    safeEquipmentIndependentMultiplierFactor;
+    safeEquipmentIndependentMultiplierFactor *
+    safeCustomIndependentMultiplierFactor;
 
   return {
     mainStatFactor,
@@ -875,6 +1199,7 @@ export function calculateDamageBreakdown(
     skillDamageFactor,
     globalIndependentMultiplierFactor: safeGlobalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor: safeEquipmentIndependentMultiplierFactor,
+    customIndependentMultiplierFactor: safeCustomIndependentMultiplierFactor,
     expectedCombatFactor,
     totalDamageFactor,
     damageBase,
@@ -893,6 +1218,11 @@ export function calculateDamageBreakdown(
     totalCritDamageAdditive,
     totalVulnerableDamageAdditive,
     totalGenericAdditive,
+    customGenericAdditive: customRuleOutputs.genericAdditive,
+    customCritDamageAdditive: customRuleOutputs.critDamageAdditive,
+    customVulnerableDamageAdditive: customRuleOutputs.vulnerableDamageAdditive,
+    customPanelStats,
+    customDamageRules: customRuleOutputs.rules,
     stateBreakdown,
     gearTotals: { ...gearTotals },
   };
@@ -902,12 +1232,23 @@ export function calculateEquipmentBreakdown(
   baseInputs: BaseInputs,
   equipment: EquipmentItem[],
   globalIndependentMultiplierFactor = 1,
+  customContext: CustomCalculationContext = {},
 ): DamageBreakdown {
+  const customPanelStats = customContext.customPanelStats ?? [];
+
   return calculateDamageBreakdown(
     baseInputs,
     aggregateGear(equipment, baseInputs),
     globalIndependentMultiplierFactor,
     calculateEquipmentIndependentMultiplierFactor(equipment),
+    {
+      ...customContext,
+      customAffixTotals: aggregateCustomAffixTotals(
+        equipment,
+        baseInputs,
+        customPanelStats,
+      ),
+    },
   );
 }
 
@@ -958,6 +1299,10 @@ export function compareBreakdowns(
         before.equipmentIndependentMultiplierFactor,
         after.equipmentIndependentMultiplierFactor,
       ),
+      customIndependentMultiplierFactor: makeFactorChange(
+        before.customIndependentMultiplierFactor,
+        after.customIndependentMultiplierFactor,
+      ),
       expectedCombatFactor: makeFactorChange(
         before.expectedCombatFactor,
         after.expectedCombatFactor,
@@ -976,18 +1321,34 @@ export function compareWithDeltas(
   deltas: DeltaRow[],
   globalIndependentMultiplierFactor = 1,
   equipmentIndependentMultiplierFactor = 1,
+  customContext: CustomCalculationContext = {},
 ): ComparisonBreakdown {
+  const customPanelStats = customContext.customPanelStats ?? [];
+  const beforeCustomAffixTotals = customContext.customAffixTotals ?? {};
+  const afterCustomAffixTotals = applyDeltasToCustomAffixTotals(
+    beforeCustomAffixTotals,
+    deltas,
+    customPanelStats,
+  );
   const before = calculateDamageBreakdown(
     baseInputs,
     gearTotals,
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    {
+      ...customContext,
+      customAffixTotals: beforeCustomAffixTotals,
+    },
   );
   const after = calculateDamageBreakdown(
     baseInputs,
     applyDeltasToGearTotals(gearTotals, deltas),
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    {
+      ...customContext,
+      customAffixTotals: afterCustomAffixTotals,
+    },
   );
 
   return compareBreakdowns(before, after);
@@ -999,11 +1360,13 @@ export function compareWithReplacement(
   replacedItemId: string,
   candidate: EquipmentItem,
   globalIndependentMultiplierFactor = 1,
+  customContext: CustomCalculationContext = {},
 ): ComparisonBreakdown {
   const before = calculateEquipmentBreakdown(
     baseInputs,
     equipment,
     globalIndependentMultiplierFactor,
+    customContext,
   );
   const nextEquipment = equipment.map((item) =>
     item.id === replacedItemId ? { ...candidate, enabled: true } : item,
@@ -1012,6 +1375,7 @@ export function compareWithReplacement(
     baseInputs,
     nextEquipment,
     globalIndependentMultiplierFactor,
+    customContext,
   );
 
   return compareBreakdowns(before, after);
@@ -1023,15 +1387,22 @@ export function calculateMarginalGains(
   deltasByType: TypicalRolls,
   globalIndependentMultiplierFactor = 1,
   equipmentIndependentMultiplierFactor = 1,
+  customContext: CustomCalculationContext = {},
 ): MarginalGain[] {
+  const customPanelStats = customContext.customPanelStats ?? [];
+  const beforeCustomAffixTotals = customContext.customAffixTotals ?? {};
   const before = calculateDamageBreakdown(
     baseInputs,
     gearTotals,
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    {
+      ...customContext,
+      customAffixTotals: beforeCustomAffixTotals,
+    },
   );
 
-  return AFFIX_TYPES.map((type) => {
+  const builtInGains = AFFIX_TYPES.map((type) => {
     const delta = deltasByType[type];
     const afterTotals = addAffixToGearTotals({ ...gearTotals }, type, delta);
     const after = calculateDamageBreakdown(
@@ -1039,6 +1410,10 @@ export function calculateMarginalGains(
       afterTotals,
       globalIndependentMultiplierFactor,
       equipmentIndependentMultiplierFactor,
+      {
+        ...customContext,
+        customAffixTotals: beforeCustomAffixTotals,
+      },
     );
 
     return {
@@ -1051,7 +1426,43 @@ export function calculateMarginalGains(
       currentBucketTotal: getCurrentBucketTotal(before, type),
       currentFactor: getCurrentFactor(before, type),
     };
-  }).sort((a, b) => b.relativeChange - a.relativeChange);
+  });
+
+  const customGains = customPanelStats
+    .filter((stat) => stat.enabled)
+    .map((stat) => {
+      const delta = customContext.customStatReferenceValues?.[stat.id] ?? 10;
+      const afterCustomAffixTotals = {
+        ...beforeCustomAffixTotals,
+        [stat.id]: (beforeCustomAffixTotals[stat.id] ?? 0) + delta,
+      };
+      const after = calculateDamageBreakdown(
+        baseInputs,
+        gearTotals,
+        globalIndependentMultiplierFactor,
+        equipmentIndependentMultiplierFactor,
+        {
+          ...customContext,
+          customAffixTotals: afterCustomAffixTotals,
+        },
+      );
+
+      return {
+        type: "customStat" as const,
+        customStatId: stat.id,
+        delta,
+        relativeChange: relativeChange(
+          before.totalDamageFactor,
+          after.totalDamageFactor,
+        ),
+        currentBucketTotal: getCurrentBucketTotal(before, "customStat", stat.id),
+        currentFactor: getCurrentFactor(before, "customStat"),
+      };
+    });
+
+  return [...builtInGains, ...customGains].sort(
+    (a, b) => b.relativeChange - a.relativeChange,
+  );
 }
 
 export function calculateUnitMarginalGains(
@@ -1059,6 +1470,7 @@ export function calculateUnitMarginalGains(
   gearTotals: GearTotals,
   globalIndependentMultiplierFactor = 1,
   equipmentIndependentMultiplierFactor = 1,
+  customContext: CustomCalculationContext = {},
 ): MarginalGain[] {
   return calculateMarginalGains(
     baseInputs,
@@ -1077,6 +1489,12 @@ export function calculateUnitMarginalGains(
     },
     globalIndependentMultiplierFactor,
     equipmentIndependentMultiplierFactor,
+    {
+      ...customContext,
+      customStatReferenceValues: Object.fromEntries(
+        (customContext.customPanelStats ?? []).map((stat) => [stat.id, 1]),
+      ),
+    },
   );
 }
 
@@ -1160,8 +1578,14 @@ export function sanitizeItemIndependentMultiplierValue(
 export function getCurrentBucketTotal(
   breakdown: DamageBreakdown,
   type: AffixType,
+  customStatId?: string,
 ): number {
   switch (type) {
+    case "customStat":
+      return (
+        breakdown.customPanelStats.find((stat) => stat.id === customStatId)
+          ?.finalValue ?? 0
+      );
     case "critChance":
       return breakdown.totalCritChance;
     case "mainStat":
@@ -1190,6 +1614,8 @@ export function getCurrentFactor(
   type: AffixType,
 ): number {
   switch (type) {
+    case "customStat":
+      return breakdown.customIndependentMultiplierFactor;
     case "critChance":
     case "critDamageMultiplier":
       return breakdown.critFactor;
@@ -1256,6 +1682,41 @@ function getMainSkillBaseMultiplierFactor(multiplierPercent: number): number {
 
 function sanitizeMultiplierFactor(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+function sanitizeNumber(value: number | undefined, fallback: number): number {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function sanitizeFiniteOrDefault(
+  value: number | undefined,
+  fallback: number,
+): number {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function createEmptyCustomRuleOutputs(): CustomRuleOutputs {
+  return {
+    genericAdditive: 0,
+    critDamageAdditive: 0,
+    vulnerableDamageAdditive: 0,
+    independentMultiplierFactor: 1,
+    rules: [],
+  };
+}
+
+function getEnabledCustomStatIds(
+  customPanelStats: CustomPanelStat[] = [],
+): Set<string> {
+  return new Set(
+    customPanelStats
+      .filter((stat) => stat.enabled !== false)
+      .map((stat) => stat.id),
+  );
 }
 
 function coerceSkillRankAffixValue(value: number): number {

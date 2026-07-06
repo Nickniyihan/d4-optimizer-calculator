@@ -3,6 +3,9 @@ import {
   Affix,
   AppState,
   AffixType,
+  CustomDamageRule,
+  CustomDamageRuleOutput,
+  CustomPanelStat,
   DEFAULT_BASE_INPUTS,
   DEFAULT_GLOBAL_INDEPENDENT_MULTIPLIERS,
   DEFAULT_TYPICAL_ROLLS,
@@ -88,6 +91,10 @@ export function normalizeImportedState(parsed: unknown): AppState {
           .map((delta, index) => ({
             id: String(delta.id ?? `imported-delta-${index}`),
             type: delta.type as AffixType,
+            customStatId:
+              delta.type === "customStat" && delta.customStatId
+                ? String(delta.customStatId)
+                : undefined,
             value: Number(delta.value) || 0,
           }))
       : [],
@@ -95,6 +102,28 @@ export function normalizeImportedState(parsed: unknown): AppState {
       ...DEFAULT_TYPICAL_ROLLS,
       ...(isRecord(parsed.typicalRolls) ? parsed.typicalRolls : {}),
     },
+    customStatReferenceValues: isRecord(parsed.customStatReferenceValues)
+      ? Object.fromEntries(
+          Object.entries(parsed.customStatReferenceValues).map(([key, value]) => [
+            key,
+            Number(value) || 10,
+          ]),
+        )
+      : {},
+    customPanelStats: Array.isArray(parsed.customPanelStats)
+      ? normalizeCustomPanelStatIds(
+          parsed.customPanelStats
+            .filter(isRecord)
+            .map(readCustomPanelStat),
+        )
+      : [],
+    customDamageRules: Array.isArray(parsed.customDamageRules)
+      ? normalizeCustomDamageRuleIds(
+          parsed.customDamageRules
+            .filter(isRecord)
+            .map(readCustomDamageRule),
+        )
+      : [],
     includeGlobalIndependentMultipliers:
       typeof parsed.includeGlobalIndependentMultipliers === "boolean"
         ? parsed.includeGlobalIndependentMultipliers
@@ -108,6 +137,38 @@ export function normalizeImportedState(parsed: unknown): AppState {
             .map(readGlobalIndependentMultiplier),
         )
       : [...DEFAULT_GLOBAL_INDEPENDENT_MULTIPLIERS],
+  };
+}
+
+function readCustomPanelStat(
+  value: Record<string, unknown>,
+  index: number,
+): CustomPanelStat {
+  return {
+    id: String(value.id ?? `imported-custom-stat-${index}`),
+    enabled: value.enabled !== false,
+    name: String(value.name ?? ""),
+    affixLabel: String(value.affixLabel ?? ""),
+    baseValue: Number(value.baseValue) || 0,
+    affixValueScale: Number.isFinite(Number(value.affixValueScale))
+      ? Number(value.affixValueScale)
+      : 1,
+  };
+}
+
+function readCustomDamageRule(
+  value: Record<string, unknown>,
+  index: number,
+): CustomDamageRule {
+  return {
+    id: String(value.id ?? `imported-custom-rule-${index}`),
+    enabled: value.enabled !== false,
+    name: String(value.name ?? ""),
+    sourceCustomStatId: String(value.sourceCustomStatId ?? ""),
+    percentPerPoint: Number(value.percentPerPoint) || 0,
+    output: isCustomDamageRuleOutput(value.output)
+      ? value.output
+      : "independentMultiplier",
   };
 }
 
@@ -148,6 +209,57 @@ function normalizeGlobalIndependentMultiplierIds(
     seen.add(nextId);
 
     return { ...row, id: nextId };
+  });
+}
+
+function normalizeCustomPanelStatIds(
+  rows: CustomPanelStat[],
+): CustomPanelStat[] {
+  return normalizeRowIds(
+    rows,
+    "imported-custom-stat",
+    (row, id) => ({ ...row, id }),
+    (row) => row.id,
+  );
+}
+
+function normalizeCustomDamageRuleIds(
+  rows: CustomDamageRule[],
+): CustomDamageRule[] {
+  return normalizeRowIds(
+    rows,
+    "imported-custom-rule",
+    (row, id) => ({ ...row, id }),
+    (row) => row.id,
+  );
+}
+
+function normalizeRowIds<T>(
+  rows: T[],
+  fallbackPrefix: string,
+  setId: (row: T, id: string) => T,
+  getId: (row: T) => string,
+): T[] {
+  const seen = new Set<string>();
+
+  return rows.map((row, index) => {
+    const fallbackId = `${fallbackPrefix}-${index}`;
+    const id = getId(row).trim() || fallbackId;
+
+    if (!seen.has(id)) {
+      seen.add(id);
+      return setId(row, id);
+    }
+
+    let nextId = `${id}-${index}`;
+    let suffix = 1;
+    while (seen.has(nextId)) {
+      suffix += 1;
+      nextId = `${id}-${index}-${suffix}`;
+    }
+    seen.add(nextId);
+
+    return setId(row, nextId);
   });
 }
 
@@ -254,6 +366,10 @@ function readAffix(value: Record<string, unknown>, fallbackId: string) {
   return {
     id: String(value.id ?? fallbackId),
     type: isAffixType(value.type) ? value.type : "critChance",
+    customStatId:
+      value.type === "customStat" && value.customStatId
+        ? String(value.customStatId)
+        : undefined,
     value: Number(value.value) || 0,
     isGreaterAffix: value.isGreaterAffix === true,
   };
@@ -322,7 +438,22 @@ function normalizeCapstoneAffixId(
 }
 
 function isAffixType(value: unknown): value is AffixType {
-  return typeof value === "string" && AFFIX_TYPES.includes(value as AffixType);
+  return (
+    value === "customStat" ||
+    (typeof value === "string" &&
+      AFFIX_TYPES.includes(value as (typeof AFFIX_TYPES)[number]))
+  );
+}
+
+function isCustomDamageRuleOutput(
+  value: unknown,
+): value is CustomDamageRuleOutput {
+  return (
+    value === "genericAdditive" ||
+    value === "critDamageAdditive" ||
+    value === "vulnerableDamageAdditive" ||
+    value === "independentMultiplier"
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

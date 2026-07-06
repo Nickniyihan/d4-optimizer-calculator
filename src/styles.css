@@ -176,6 +176,10 @@ p {
   padding: 0.85rem;
 }
 
+.equipmentTabContent {
+  overflow: hidden;
+}
+
 .tabStrip {
   display: flex;
   gap: 0.35rem;
@@ -363,8 +367,9 @@ p {
 .equipmentWorkspace {
   display: grid;
   gap: 0.85rem;
+  height: 100%;
   grid-template-columns: 320px minmax(0, 1fr);
-  min-height: 100%;
+  min-height: 0;
 }
 
 .equipmentListPane,
@@ -379,14 +384,17 @@ p {
   border-right: 1px solid #e4ddd4;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
   padding-right: 0.85rem;
 }
 
 .equipmentList {
+  align-content: start;
   display: grid;
   gap: 0.5rem;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 0.2rem;
 }
 
@@ -396,8 +404,10 @@ p {
   color: #302720;
   display: grid;
   gap: 0.28rem;
-  min-height: 76px;
+  height: auto;
+  min-height: auto;
   min-width: 0;
+  overflow: visible;
   padding: 0.65rem;
 }
 
@@ -435,9 +445,20 @@ p {
 
 .equipmentPreviewLine {
   color: #62574d;
-  display: block;
+  display: -webkit-box;
   font-size: 0.78rem;
   font-weight: 500;
+  line-height: 1.35;
+  overflow: hidden;
+  padding: 0.04rem 0;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.equipmentPreviewLine.truncate {
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .selectedListItem {
@@ -561,6 +582,16 @@ p {
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+.recommendedCapstoneRow {
+  border-color: #8d2f2e;
+  box-shadow: inset 3px 0 0 #8d2f2e;
+}
+
+.selectedCapstoneValue {
+  color: #d97706;
+  font-weight: 800;
+}
+
 .extraAffixValueRow {
   grid-template-columns: minmax(0, 1fr) auto auto 62px;
 }
@@ -650,6 +681,7 @@ p {
 .globalMultiplierTable {
   display: grid;
   gap: 0.4rem;
+  overflow-x: auto;
 }
 
 .globalMultiplierRow {
@@ -670,6 +702,22 @@ p {
   font-size: 0.76rem;
   font-weight: 800;
   padding-bottom: 0;
+}
+
+.customConfigTable {
+  min-width: 920px;
+}
+
+.customPanelStatRow {
+  grid-template-columns:
+    64px minmax(130px, 1fr) minmax(130px, 1fr) minmax(92px, 0.45fr)
+    minmax(92px, 0.45fr) minmax(92px, 0.45fr) auto;
+}
+
+.customDamageRuleRow {
+  grid-template-columns:
+    64px minmax(130px, 1fr) minmax(130px, 0.8fr) minmax(92px, 0.45fr)
+    minmax(150px, 0.9fr) minmax(92px, 0.45fr) auto;
 }
 
 .compactCheck {
@@ -740,8 +788,7 @@ p {
 }
 
 .currentCapstoneRow {
-  border-color: #8d2f2e;
-  box-shadow: inset 3px 0 0 #8d2f2e;
+  background: #fff8ed;
 }
 
 .srOnly {
@@ -1080,8 +1127,21 @@ p {
   .equipmentListPane {
     border-right: 0;
     border-bottom: 1px solid #e4ddd4;
+    overflow: visible;
     padding-bottom: 0.85rem;
     padding-right: 0;
+  }
+
+  .equipmentTabContent {
+    overflow: auto;
+  }
+
+  .equipmentWorkspace {
+    height: auto;
+  }
+
+  .equipmentList {
+    max-height: 420px;
   }
 
   .headerControls {

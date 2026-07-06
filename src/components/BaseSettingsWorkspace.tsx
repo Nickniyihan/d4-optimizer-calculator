@@ -2,13 +2,19 @@ import { useState } from "react";
 import {
   AFFIX_TYPES,
   BaseInputs,
+  CustomDamageRule,
+  CustomDamageRuleOutput,
+  CustomPanelStat,
   GlobalIndependentMultiplier,
   TypicalRolls,
+  createCustomDamageRule,
+  createCustomPanelStat,
   createGlobalIndependentMultiplier,
   globalIndependentMultiplierRowFactor,
   sanitizeGlobalIndependentMultiplierValue,
 } from "../lib/damageModel";
 import { Translation } from "../i18n";
+import { getCustomStatDisplayName } from "./affixOptions";
 import {
   fromPercentInput,
   formatNumber,
@@ -32,6 +38,12 @@ interface BaseSettingsWorkspaceProps {
   t: Translation;
   baseInputs: BaseInputs;
   typicalRolls: TypicalRolls;
+  customStatReferenceValues: Record<string, number>;
+  customPanelStats: CustomPanelStat[];
+  customDamageRules: CustomDamageRule[];
+  customPanelStatFinalValues: Record<string, number>;
+  customDamageRuleEffects: Record<string, { rulePercent: number; factor: number }>;
+  customIndependentMultiplierFactor: number;
   includeGlobalIndependentMultipliers: boolean;
   globalIndependentMultipliers: GlobalIndependentMultiplier[];
   globalIndependentMultiplierFactor: number;
@@ -39,6 +51,9 @@ interface BaseSettingsWorkspaceProps {
   classPreset: ClassPreset;
   onBaseInputsChange: (baseInputs: BaseInputs) => void;
   onTypicalRollsChange: (typicalRolls: TypicalRolls) => void;
+  onCustomStatReferenceValuesChange: (values: Record<string, number>) => void;
+  onCustomPanelStatsChange: (stats: CustomPanelStat[]) => void;
+  onCustomDamageRulesChange: (rules: CustomDamageRule[]) => void;
   onIncludeGlobalIndependentMultipliersChange: (enabled: boolean) => void;
   onGlobalIndependentMultipliersChange: (
     rows: GlobalIndependentMultiplier[],
@@ -63,6 +78,12 @@ export function BaseSettingsWorkspace({
   t,
   baseInputs,
   typicalRolls,
+  customStatReferenceValues,
+  customPanelStats,
+  customDamageRules,
+  customPanelStatFinalValues,
+  customDamageRuleEffects,
+  customIndependentMultiplierFactor,
   includeGlobalIndependentMultipliers,
   globalIndependentMultipliers,
   globalIndependentMultiplierFactor,
@@ -70,12 +91,19 @@ export function BaseSettingsWorkspace({
   classPreset,
   onBaseInputsChange,
   onTypicalRollsChange,
+  onCustomStatReferenceValuesChange,
+  onCustomPanelStatsChange,
+  onCustomDamageRulesChange,
   onIncludeGlobalIndependentMultipliersChange,
   onGlobalIndependentMultipliersChange,
   onAutoSaveEnabledChange,
   onClassPresetChange,
 }: BaseSettingsWorkspaceProps) {
   const [globalMultipliersExpanded, setGlobalMultipliersExpanded] =
+    useState(false);
+  const [customPanelStatsExpanded, setCustomPanelStatsExpanded] =
+    useState(false);
+  const [customDamageRulesExpanded, setCustomDamageRulesExpanded] =
     useState(false);
   const updatePercentField = (
     field:
@@ -263,6 +291,25 @@ export function BaseSettingsWorkspace({
               />
             </label>
           ))}
+          {customPanelStats
+            .filter((stat) => stat.enabled !== false)
+            .map((stat) => (
+              <label className="field" key={stat.id}>
+                <span className="truncate" title={formatCustomReferenceLabel(t, stat)}>
+                  {formatCustomReferenceLabel(t, stat)}
+                </span>
+                <input
+                  type="number"
+                  value={customStatReferenceValues[stat.id] ?? 10}
+                  onChange={(event) =>
+                    onCustomStatReferenceValuesChange({
+                      ...customStatReferenceValues,
+                      [stat.id]: Number(event.target.value),
+                    })
+                  }
+                />
+              </label>
+            ))}
         </div>
       </section>
 
@@ -422,8 +469,377 @@ export function BaseSettingsWorkspace({
           </div>
         )}
       </section>
+
+      <section className="panel globalMultiplierPanel">
+        <button
+          type="button"
+          className="globalMultiplierSummary"
+          onClick={() => setCustomPanelStatsExpanded((expanded) => !expanded)}
+          title={
+            customPanelStatsExpanded ? t.settings.collapse : t.settings.expand
+          }
+        >
+          <span>
+            {t.settings.customPanelStats}: {customPanelStats.length}
+          </span>
+          <strong>
+            {customPanelStatsExpanded ? t.settings.collapse : t.settings.expand}
+          </strong>
+        </button>
+
+        {customPanelStatsExpanded && (
+          <div className="globalMultiplierContent">
+            <p>{t.settings.customPanelStatsHelp}</p>
+            <CustomPanelStatsTable
+              t={t}
+              rows={customPanelStats}
+              finalValues={customPanelStatFinalValues}
+              onChange={onCustomPanelStatsChange}
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="panel globalMultiplierPanel">
+        <button
+          type="button"
+          className="globalMultiplierSummary"
+          onClick={() => setCustomDamageRulesExpanded((expanded) => !expanded)}
+          title={
+            customDamageRulesExpanded ? t.settings.collapse : t.settings.expand
+          }
+        >
+          <span>
+            {t.settings.customDamageRules}: {customDamageRules.length}, x
+            {formatNumber(customIndependentMultiplierFactor, 3)}
+          </span>
+          <strong>
+            {customDamageRulesExpanded ? t.settings.collapse : t.settings.expand}
+          </strong>
+        </button>
+
+        {customDamageRulesExpanded && (
+          <div className="globalMultiplierContent">
+            <p>{t.settings.customDamageRulesHelp}</p>
+            <CustomDamageRulesTable
+              t={t}
+              rows={customDamageRules}
+              customPanelStats={customPanelStats}
+              effects={customDamageRuleEffects}
+              onChange={onCustomDamageRulesChange}
+            />
+          </div>
+        )}
+      </section>
     </div>
   );
+}
+
+function CustomPanelStatsTable({
+  t,
+  rows,
+  finalValues,
+  onChange,
+}: {
+  t: Translation;
+  rows: CustomPanelStat[];
+  finalValues: Record<string, number>;
+  onChange: (rows: CustomPanelStat[]) => void;
+}) {
+  const updateRow = (row: CustomPanelStat) => {
+    onChange(rows.map((current) => (current.id === row.id ? row : current)));
+  };
+  const moveRow = (rowId: string, direction: "up" | "down") =>
+    moveTableRow(rows, rowId, direction, onChange);
+
+  return (
+    <div className="globalMultiplierTable customConfigTable">
+      <div className="globalMultiplierRow customPanelStatRow globalMultiplierHeader">
+        <span>{t.settings.enabled}</span>
+        <span>{t.settings.name}</span>
+        <span>{t.settings.affixLabel}</span>
+        <span>{t.settings.baseValue}</span>
+        <span>{t.settings.affixValueScale}</span>
+        <span>{t.settings.finalValue}</span>
+        <span>{t.settings.actions}</span>
+      </div>
+      {rows.map((row, index) => (
+        <div className="globalMultiplierRow customPanelStatRow" key={row.id}>
+          <label className="compactCheck">
+            <input
+              type="checkbox"
+              checked={row.enabled}
+              onChange={(event) =>
+                updateRow({ ...row, enabled: event.target.checked })
+              }
+            />
+            <span className="srOnly">{t.settings.enabled}</span>
+          </label>
+          <input
+            value={row.name}
+            placeholder={t.settings.customPanelStat}
+            onChange={(event) => updateRow({ ...row, name: event.target.value })}
+          />
+          <input
+            value={row.affixLabel}
+            placeholder={t.settings.affixLabel}
+            onChange={(event) =>
+              updateRow({ ...row, affixLabel: event.target.value })
+            }
+          />
+          <input
+            type="number"
+            value={row.baseValue}
+            onChange={(event) =>
+              updateRow({ ...row, baseValue: Number(event.target.value) })
+            }
+          />
+          <input
+            type="number"
+            value={row.affixValueScale}
+            onChange={(event) =>
+              updateRow({ ...row, affixValueScale: Number(event.target.value) })
+            }
+          />
+          <strong>{formatNumber(finalValues[row.id] ?? row.baseValue, 2)}</strong>
+          <RowActions
+            t={t}
+            index={index}
+            rowCount={rows.length}
+            onMoveUp={() => moveRow(row.id, "up")}
+            onMoveDown={() => moveRow(row.id, "down")}
+            onDelete={() => onChange(rows.filter((current) => current.id !== row.id))}
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="secondaryButton"
+        onClick={() => onChange([...rows, createCustomPanelStat()])}
+      >
+        {t.settings.addCustomPanelStat}
+      </button>
+    </div>
+  );
+}
+
+const customDamageRuleOutputs: CustomDamageRuleOutput[] = [
+  "genericAdditive",
+  "critDamageAdditive",
+  "vulnerableDamageAdditive",
+  "independentMultiplier",
+];
+
+function CustomDamageRulesTable({
+  t,
+  rows,
+  customPanelStats,
+  effects,
+  onChange,
+}: {
+  t: Translation;
+  rows: CustomDamageRule[];
+  customPanelStats: CustomPanelStat[];
+  effects: Record<string, { rulePercent: number; factor: number }>;
+  onChange: (rows: CustomDamageRule[]) => void;
+}) {
+  const enabledStats = customPanelStats.filter((stat) => stat.enabled !== false);
+  const firstEnabledStatId = enabledStats[0]?.id ?? "";
+  const updateRow = (row: CustomDamageRule) => {
+    onChange(rows.map((current) => (current.id === row.id ? row : current)));
+  };
+  const moveRow = (rowId: string, direction: "up" | "down") =>
+    moveTableRow(rows, rowId, direction, onChange);
+
+  return (
+    <div className="globalMultiplierTable customConfigTable">
+      <div className="globalMultiplierRow customDamageRuleRow globalMultiplierHeader">
+        <span>{t.settings.enabled}</span>
+        <span>{t.settings.name}</span>
+        <span>{t.settings.sourceCustomStat}</span>
+        <span>{t.settings.damagePerPoint}</span>
+        <span>{t.settings.outputType}</span>
+        <span>{t.settings.currentEffect}</span>
+        <span>{t.settings.actions}</span>
+      </div>
+      {rows.map((row, index) => (
+        <div className="globalMultiplierRow customDamageRuleRow" key={row.id}>
+          <label className="compactCheck">
+            <input
+              type="checkbox"
+              checked={row.enabled}
+              onChange={(event) =>
+                updateRow({ ...row, enabled: event.target.checked })
+              }
+            />
+            <span className="srOnly">{t.settings.enabled}</span>
+          </label>
+          <input
+            value={row.name}
+            placeholder={t.settings.customDamageRules}
+            onChange={(event) => updateRow({ ...row, name: event.target.value })}
+          />
+          <select
+            value={row.sourceCustomStatId}
+            onChange={(event) =>
+              updateRow({ ...row, sourceCustomStatId: event.target.value })
+            }
+          >
+            {!enabledStats.some((stat) => stat.id === row.sourceCustomStatId) && (
+              <option value={row.sourceCustomStatId}>
+                {t.settings.invalidCustomStat}
+              </option>
+            )}
+            {enabledStats.map((stat) => (
+              <option value={stat.id} key={stat.id}>
+                {getCustomStatDisplayName(t, customPanelStats, stat.id)}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={row.percentPerPoint}
+            onChange={(event) =>
+              updateRow({ ...row, percentPerPoint: Number(event.target.value) })
+            }
+          />
+          <select
+            value={row.output}
+            onChange={(event) =>
+              updateRow({
+                ...row,
+                output: event.target.value as CustomDamageRuleOutput,
+              })
+            }
+          >
+            {customDamageRuleOutputs.map((output) => (
+              <option value={output} key={output}>
+                {getOutputLabel(t, output)}
+              </option>
+            ))}
+          </select>
+          <strong>{formatRuleEffect(row, effects[row.id])}</strong>
+          <RowActions
+            t={t}
+            index={index}
+            rowCount={rows.length}
+            onMoveUp={() => moveRow(row.id, "up")}
+            onMoveDown={() => moveRow(row.id, "down")}
+            onDelete={() => onChange(rows.filter((current) => current.id !== row.id))}
+          />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="secondaryButton"
+        onClick={() =>
+          onChange([...rows, createCustomDamageRule(firstEnabledStatId)])
+        }
+      >
+        {t.settings.addCustomDamageRule}
+      </button>
+    </div>
+  );
+}
+
+function RowActions({
+  t,
+  index,
+  rowCount,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+}: {
+  t: Translation;
+  index: number;
+  rowCount: number;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <span className="globalMultiplierActions">
+      <button
+        type="button"
+        className="iconButton"
+        title={t.settings.moveUp}
+        aria-label={t.settings.moveUp}
+        disabled={index === 0}
+        onClick={onMoveUp}
+      >
+        ↑
+      </button>
+      <button
+        type="button"
+        className="iconButton"
+        title={t.settings.moveDown}
+        aria-label={t.settings.moveDown}
+        disabled={index === rowCount - 1}
+        onClick={onMoveDown}
+      >
+        ↓
+      </button>
+      <button type="button" className="ghostButton" onClick={onDelete}>
+        {t.settings.delete}
+      </button>
+    </span>
+  );
+}
+
+function moveTableRow<T extends { id: string }>(
+  rows: T[],
+  rowId: string,
+  direction: "up" | "down",
+  onChange: (rows: T[]) => void,
+) {
+  const index = rows.findIndex((row) => row.id === rowId);
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+
+  if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) {
+    return;
+  }
+
+  const nextRows = [...rows];
+  const row = nextRows[index];
+  nextRows[index] = nextRows[nextIndex];
+  nextRows[nextIndex] = row;
+  onChange(nextRows);
+}
+
+function getOutputLabel(
+  t: Translation,
+  output: CustomDamageRuleOutput,
+): string {
+  switch (output) {
+    case "genericAdditive":
+      return t.settings.outputGenericAdditive;
+    case "critDamageAdditive":
+      return t.settings.outputCritDamageAdditive;
+    case "vulnerableDamageAdditive":
+      return t.settings.outputVulnerableDamageAdditive;
+    case "independentMultiplier":
+      return t.settings.outputIndependentMultiplier;
+  }
+}
+
+function formatRuleEffect(
+  row: CustomDamageRule,
+  effect?: { rulePercent: number; factor: number },
+): string {
+  const percent = effect?.rulePercent ?? 0;
+
+  return row.output === "independentMultiplier"
+    ? `x${formatNumber(effect?.factor ?? 1, 3)}`
+    : `${formatNumber(percent, 2)}%`;
+}
+
+function formatCustomReferenceLabel(
+  t: Translation,
+  stat: CustomPanelStat,
+): string {
+  const label = stat.affixLabel.trim() || stat.name.trim() || t.settings.customAffixFallback;
+
+  return t.settings.customStatReferenceLabel.replace("{label}", label);
 }
 
 function GlobalIndependentMultiplierTable({
