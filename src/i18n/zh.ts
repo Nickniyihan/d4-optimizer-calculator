@@ -121,6 +121,20 @@ export const zh: TranslationShape<typeof en> = {
       "自定义独立乘区来自自定义伤害规则中输出类型为“独立乘区”的规则，按 ∏(1 + 规则增伤%) 连乘。",
     customDamageRuleBucketHelp:
       "自定义伤害规则可以把自定义面板值转换为普通加法伤害、+暴击伤害、+易伤伤害或独立乘区。加法类输出会并入对应加法桶；独立乘区会作为单独乘区显示。",
+    damageMode: "伤害模式",
+    notVulnerable: "非易伤",
+    vulnerable: "易伤",
+    dotMultiplier: "持续伤害倍率",
+    dotMultiplierColumnHelp:
+      "持续伤害倍率 = 基础持续伤害倍率 x (1 + 总x持续性伤害增倍)。",
+    dotStateAdditiveColumnHelp:
+      "持续伤害加法系数 = 1 + 普通加法伤害 + +持续性伤害。易伤状态还会加入 +易伤伤害。",
+    dotStateContributionColumnHelp:
+      "持续伤害贡献 = 概率 x 加法系数 x 易伤倍率 x 持续伤害倍率。期望战斗系数等于两个持续伤害状态贡献之和。",
+    dotConditionalNote:
+      "持续伤害在这个模型中不进入暴击状态。这里仅区分非易伤和易伤两种状态；类型/全伤增倍仍在状态表之外只计算一次。",
+    targetedIndependentMultiplier: "指定独立乘区",
+    inactiveInCurrentMode: "当前模式不生效",
     sourceQuickDelta: "来源：手动改动",
     sourceCandidateItem: "来源：候选装备",
     sourceManualChanges: "来源：手动改动",
@@ -164,6 +178,14 @@ export const zh: TranslationShape<typeof en> = {
     mainSkillBaseMultiplier: "主要技能基础伤害倍率 (%)",
     mainSkillBaseMultiplierHelp:
       "填写主要输出技能的基础伤害倍率，例如技能描述中的“造成 250% 伤害”。默认 100% 不改变旧计算结果。",
+    primaryDamageType: "主要伤害类型",
+    primaryDamageTypeHelp:
+      "选择当前比较的主要伤害是直伤还是持续伤害。直伤沿用暴击/易伤模型；持续伤害忽略暴击，并使用持续伤害状态公式。",
+    directDamage: "直伤",
+    damageOverTime: "持续伤害",
+    baseDotMultiplier: "基础持续伤害倍率",
+    baseDotMultiplierHelp:
+      "主要持续伤害效果的基础倍率。若只做相对收益比较，保持 1 即可；如果你想让伤害指数包含已知的持续伤害基础系数，可以在这里填写。",
     baseCritMultiplier: "基础暴击倍率（游戏默认）",
     baseVulnerableMultiplier: "基础易伤倍率（游戏默认）",
     critChanceCap: "暴击率上限（游戏默认）(%)",
@@ -215,6 +237,32 @@ export const zh: TranslationShape<typeof en> = {
       "自定义独立乘区来自自定义伤害规则中输出类型为“独立乘区”的规则，按 ∏(1 + 规则增伤%) 连乘。",
     customDamageRuleBucketHelp:
       "自定义伤害规则可以把自定义面板值转换为普通加法伤害、+暴击伤害、+易伤伤害或独立乘区。加法类输出会并入对应加法桶；独立乘区会作为单独乘区显示。",
+    affixVisibility: "词条显示设置",
+    affixVisibilityHelp:
+      "控制哪些词条出现在新增/编辑词条的下拉菜单中。此设置只影响下拉菜单，不会删除已有词条，也不会影响伤害计算。",
+    affixVisibilitySummary: "已显示 {visible} / {total} 个词条",
+    showAllAffixes: "全部显示",
+    directCommonAffixes: "直伤常用",
+    dotCommonAffixes: "持续伤常用",
+    useCurrentModeAffixes: "当前模式推荐",
+    showAffix: "显示",
+    affixName: "词条",
+    affixCategory: "分类",
+    affixCategoryBasic: "基础",
+    affixCategoryDirect: "直伤",
+    affixCategoryVulnerable: "易伤",
+    affixCategoryDot: "持续伤害",
+    affixCategoryGeneral: "通用",
+    affixCategoryCustom: "自定义",
+    independentMultiplierTarget: "作用目标",
+    targetAllDamage: "全部伤害",
+    targetCritDamage: "暴击伤害",
+    targetVulnerableDamage: "易伤伤害",
+    targetDotDamage: "持续伤害",
+    targetAllDamageShort: "全部",
+    targetCritDamageShort: "暴击",
+    targetVulnerableDamageShort: "易伤",
+    targetDotDamageShort: "持续",
     invalidCustomStat: "无效自定义面板值",
     customAffixFallback: "自定义词条",
     customStatReferenceLabel: "{label}参考值",
@@ -269,6 +317,8 @@ export const zh: TranslationShape<typeof en> = {
       additiveDamage: "+普通加法伤害参考值",
       critDamageAdditive: "+暴击伤害参考值",
       vulnerableDamageAdditive: "+易伤伤害参考值",
+      dotDamageAdditive: "+持续性伤害参考值",
+      dotDamageMultiplier: "x持续性伤害增倍参考值",
       skillRanks: "+技能等级参考值",
       weaponDamage: "武器伤害参考值",
     },
@@ -379,6 +429,8 @@ export const zh: TranslationShape<typeof en> = {
       additiveDamage: "+普通加法伤害",
       critDamageAdditive: "+暴击伤害",
       vulnerableDamageAdditive: "+易伤伤害",
+      dotDamageAdditive: "+持续性伤害",
+      dotDamageMultiplier: "x持续性伤害增倍",
       skillRanks: "+技能等级",
       weaponDamage: "武器伤害",
       customStat: "自定义词条",
@@ -392,6 +444,8 @@ export const zh: TranslationShape<typeof en> = {
       additiveDamage: "+普通加法伤害 (%)",
       critDamageAdditive: "+暴击伤害 (%)",
       vulnerableDamageAdditive: "+易伤伤害 (%)",
+      dotDamageAdditive: "+持续性伤害 (%)",
+      dotDamageMultiplier: "x持续性伤害增倍 (%)",
       skillRanks: "+技能等级",
       weaponDamage: "武器伤害",
       customStat: "自定义词条",
@@ -408,6 +462,8 @@ export const zh: TranslationShape<typeof en> = {
     totalVulnerableDamageMultiplier: "总 x易伤伤害增倍",
     totalCritDamageAdditive: "总 +暴击伤害",
     totalVulnerableDamageAdditive: "总 +易伤伤害",
+    totalDotDamageAdditive: "总 +持续性伤害",
+    totalDotDamageMultiplier: "总 x持续性伤害增倍",
     totalGenericAdditive: "总普通加法伤害",
     totalAdditivePool: "总普通加法伤害",
     effectiveWeaponDamage: "有效武器伤害",
@@ -419,10 +475,15 @@ export const zh: TranslationShape<typeof en> = {
     globalIndependentMultiplierFactor: "全局独立乘区",
     equipmentIndependentMultiplierFactor: "装备独立乘区",
     customIndependentMultiplierFactor: "自定义独立乘区",
+    independentMultiplierAllDamage: "独立乘区（全部伤害）",
+    independentMultiplierCritDamage: "独立乘区（暴击伤害）",
+    independentMultiplierVulnerableDamage: "独立乘区（易伤伤害）",
+    independentMultiplierDotDamage: "独立乘区（持续伤害）",
     mainStatFactor: "主属性系数",
     critFactor: "暴击系数",
     vulnerableFactor: "易伤系数",
     typeAllMultiplierFactor: "类型/全伤系数",
+    dotTypeFactor: "持续伤害系数",
     additiveFactor: "普通加法系数",
     expectedCombatFactor: "期望战斗系数",
     totalDamageFactor: "伤害指数",
@@ -442,16 +503,28 @@ export const zh: TranslationShape<typeof en> = {
         "装备独立乘区 = 所有启用装备上的“独立乘区 / 威能”连乘。每一行按 1 + 增幅% 计算。候选装备比较时，被替换装备的这些乘区也会一起替换。",
       customIndependentMultiplierFactor:
         "自定义独立乘区来自自定义伤害规则中输出类型为“独立乘区”的规则，按 ∏(1 + 规则增伤%) 连乘。",
+      independentMultiplierAllDamage:
+        "全部伤害独立乘区会作用于直伤和持续伤害的所有状态。",
+      independentMultiplierCritDamage:
+        "暴击伤害独立乘区只作用于直伤模式中的暴击状态；在持续伤害模式中不生效。",
+      independentMultiplierVulnerableDamage:
+        "易伤伤害独立乘区只在目标处于易伤时生效，直伤和持续伤害模式都会按易伤状态计算。",
+      independentMultiplierDotDamage:
+        "持续伤害独立乘区作用于所有持续伤害状态；在直伤模式中不生效。",
       critFactor:
         "（参考）(1 - 总暴击率) + 总暴击率 * 基础暴击倍率 * (1 + 总x暴击伤害增倍)",
       vulnerableFactor:
         "（参考）(1 - 易伤覆盖率) + 易伤覆盖率 * 基础易伤倍率 * (1 + 总x易伤伤害增倍)",
       typeAllMultiplierFactor: "1 + 装备类型/全伤害增倍",
+      dotTypeFactor:
+        "持续伤害系数 = 基础持续伤害倍率 x (1 + 总x持续性伤害增倍)。仅在主要伤害类型为持续伤害时使用。",
       additiveFactor: "1 + 总普通加法伤害",
       expectedCombatFactor:
-        "四种暴击/易伤状态求和：概率 * 状态加法系数 * 暴击倍率 * 易伤倍率",
+        "直伤：四种暴击/易伤状态求和。持续伤害：非易伤/易伤两种持续伤害状态求和。",
       totalDamageFactor:
         "伤害指数 = 有效武器伤害 x 技能伤害系数 x 各伤害乘区。它用于装备收益比较，不等于游戏内最终跳字。若未填写基础武器伤害或关闭武器伤害计算，则退回为相对指数。",
+      dotModeHelp:
+        "持续伤害模式忽略暴击率、+暴击伤害和 x暴击伤害增倍；它会使用普通加法伤害、+持续性伤害、易伤状态下的易伤加法/增倍，以及持续伤害倍率。",
       quality:
         "普通装备词条使用加法缩放：最终值 = 基础 roll * (1 + 品质加成 + 太古词条加成 + 精造加成)。额外 / 宝石和独立乘区 / 威能不使用这套缩放。",
       capstoneBonus:

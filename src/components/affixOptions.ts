@@ -1,9 +1,11 @@
 import {
   AFFIX_TYPES,
   Affix,
+  AffixVisibilityMap,
   AffixType,
   CustomPanelStat,
   DeltaRow,
+  isAffixVisible,
 } from "../lib/damageModel";
 import { Translation } from "../i18n";
 
@@ -17,8 +19,10 @@ export type AffixOption = {
 export function buildAffixOptions(
   t: Translation,
   customPanelStats: CustomPanelStat[] = [],
+  affixVisibility?: AffixVisibilityMap,
+  currentValue?: string,
 ): AffixOption[] {
-  return [
+  const options: AffixOption[] = [
     ...AFFIX_TYPES.map((type) => ({
       value: type,
       type,
@@ -37,6 +41,28 @@ export function buildAffixOptions(
         };
       }),
   ];
+  const currentExists = currentValue
+    ? options.some((option) => option.value === currentValue)
+    : true;
+
+  if (currentValue && !currentExists) {
+    const parsed = parseAffixOption(currentValue);
+
+    if (parsed.type === "customStat") {
+      options.push({
+        value: currentValue,
+        type: "customStat",
+        customStatId: parsed.customStatId,
+        label: getCustomAffixLabel(t, customPanelStats, parsed.customStatId),
+      });
+    }
+  }
+
+  return options.filter(
+    (option) =>
+      option.value === currentValue ||
+      isAffixVisible(affixVisibility, option.type, option.customStatId),
+  );
 }
 
 export function encodeAffixOption(type: AffixType, customStatId?: string): string {

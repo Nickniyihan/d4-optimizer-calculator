@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BASE_INPUTS, DEFAULT_TYPICAL_ROLLS } from "./damageModel";
+import {
+  DEFAULT_AFFIX_VISIBILITY,
+  DEFAULT_BASE_INPUTS,
+  DEFAULT_TYPICAL_ROLLS,
+} from "./damageModel";
 import {
   createExportFileName,
   parseImportedState,
@@ -42,18 +46,25 @@ function createExportableState() {
             enabled: true,
             name: "Aspect",
             valuePercent: 35,
+            target: "all" as const,
           },
           {
             id: "item-multiplier-b",
             enabled: false,
             name: "Unique",
             valuePercent: 120,
+            target: "dot" as const,
           },
         ],
       },
     ],
     quickDeltas: [{ id: "delta-a", type: "skillRanks" as const, value: 3 }],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
+    affixVisibility: {
+      ...DEFAULT_AFFIX_VISIBILITY,
+      critChance: false,
+      "customStat:missing": false,
+    },
     customStatReferenceValues: {},
     customPanelStats: [],
     customDamageRules: [],
@@ -64,12 +75,14 @@ function createExportableState() {
         enabled: true,
         name: "Paragon board",
         valuePercent: 25,
+        target: "all" as const,
       },
       {
         id: "global-b",
         enabled: false,
         name: "Situational buff",
         valuePercent: 40,
+        target: "crit" as const,
       },
     ],
   };
@@ -85,12 +98,15 @@ describe("JSON import/export helpers", () => {
     expect(parsed.equipment[0].affixes[1].isGreaterAffix).toBe(true);
     expect(parsed.equipment[0].extraAffixes).toHaveLength(2);
     expect(parsed.equipment[0].itemIndependentMultipliers).toHaveLength(2);
+    expect(parsed.equipment[0].itemIndependentMultipliers[1].target).toBe("dot");
     expect(parsed.quickDeltas).toHaveLength(1);
     expect(parsed.typicalRolls).toBeDefined();
+    expect(parsed.affixVisibility.critChance).toBe(false);
     expect(parsed.customPanelStats).toEqual([]);
     expect(parsed.customDamageRules).toEqual([]);
     expect(parsed.includeGlobalIndependentMultipliers).toBe(true);
     expect(parsed.globalIndependentMultipliers).toHaveLength(2);
+    expect(parsed.globalIndependentMultipliers[1].target).toBe("crit");
   });
 
   it("creates the requested export filename format", () => {
@@ -165,6 +181,87 @@ describe("JSON import/export helpers", () => {
     );
 
     expect(imported.equipment[0].itemIndependentMultipliers).toEqual([]);
+  });
+
+  it("defaults missing independent multiplier targets to all damage", () => {
+    const state = createExportableState();
+    const oldItemRows = state.equipment[0].itemIndependentMultipliers.map(
+      ({ target: _target, ...row }) => row,
+    );
+    const oldGlobalRows = state.globalIndependentMultipliers.map(
+      ({ target: _target, ...row }) => row,
+    );
+    const oldCustomRules = [
+      {
+        id: "custom-rule-a",
+        enabled: true,
+        name: "Custom",
+        sourceCustomStatId: "missing",
+        percentPerPoint: 0.5,
+        output: "independentMultiplier",
+      },
+    ];
+
+    const imported = parseImportedState(
+      JSON.stringify({
+        ...state,
+        equipment: [
+          {
+            ...state.equipment[0],
+            itemIndependentMultipliers: oldItemRows,
+          },
+        ],
+        globalIndependentMultipliers: oldGlobalRows,
+        customDamageRules: oldCustomRules,
+      }),
+    );
+
+    expect(imported.equipment[0].itemIndependentMultipliers[0].target).toBe(
+      "all",
+    );
+    expect(imported.globalIndependentMultipliers[0].target).toBe("all");
+    expect(imported.customDamageRules[0].independentMultiplierTarget).toBe("all");
+  });
+
+  it("normalizes invalid independent multiplier targets to all damage", () => {
+    const state = createExportableState();
+
+    const imported = parseImportedState(
+      JSON.stringify({
+        ...state,
+        equipment: [
+          {
+            ...state.equipment[0],
+            itemIndependentMultipliers: [
+              {
+                ...state.equipment[0].itemIndependentMultipliers[0],
+                target: "invalid",
+              },
+            ],
+          },
+        ],
+        globalIndependentMultipliers: [
+          { ...state.globalIndependentMultipliers[0], target: "invalid" },
+        ],
+        customDamageRules: [
+          {
+            id: "custom-rule-a",
+            enabled: true,
+            name: "Custom",
+            sourceCustomStatId: "missing",
+            percentPerPoint: 0.5,
+            output: "independentMultiplier",
+            independentMultiplierTarget: "invalid",
+          },
+        ],
+      }),
+    );
+
+    expect(imported.equipment[0].itemIndependentMultipliers[0].target).toBe(
+      "all",
+    );
+    expect(imported.globalIndependentMultipliers[0].target).toBe("all");
+    expect(imported.customDamageRules[0].independentMultiplierTarget).toBe("all");
   });
 
   it("clears capstone ids that point to missing affixes", () => {
@@ -262,6 +359,62 @@ describe("JSON import/export helpers", () => {
     expect(imported.customStatReferenceValues).toEqual({});
     expect(imported.customPanelStats).toEqual([]);
     expect(imported.customDamageRules).toEqual([]);
+  });
+
+  it("defaults missing affix visibility to all visible", () => {
+    const state = createExportableState();
+    const { affixVisibility: _affixVisibility, ...oldState } = state;
+
+    const imported = parseImportedState(JSON.stringify(oldState));
+
+    expect(imported.affixVisibility.critChance).toBe(true);
+    expect(imported.affixVisibility.dotDamageMultiplier).toBe(true);
+  });
+
+  it("restores imported affix visibility", () => {
+    const imported = parseImportedState(
+      serializeStateForExport(createExportableState()),
+    );
+
+    expect(imported.affixVisibility.critChance).toBe(false);
+    expect(imported.affixVisibility.mainStat).toBe(true);
+  });
+
+  it("defaults missing primary damage type and DoT base multiplier settings", () => {
+    const state = createExportableState();
+    const {
+      primaryDamageType: _primaryDamageType,
+      baseDotMultiplier: _baseDotMultiplier,
+      ...oldBaseInputs
+    } = state.baseInputs;
+
+    const imported = parseImportedState(
+      JSON.stringify({
+        ...state,
+        baseInputs: oldBaseInputs,
+      }),
+    );
+
+    expect(imported.baseInputs.primaryDamageType).toBe("direct");
+    expect(imported.baseInputs.baseDotMultiplier).toBe(1);
+  });
+
+  it("normalizes invalid imported DoT settings safely", () => {
+    const state = createExportableState();
+
+    const imported = parseImportedState(
+      JSON.stringify({
+        ...state,
+        baseInputs: {
+          ...state.baseInputs,
+          primaryDamageType: "unknown",
+          baseDotMultiplier: -5,
+        },
+      }),
+    );
+
+    expect(imported.baseInputs.primaryDamageType).toBe("direct");
+    expect(imported.baseInputs.baseDotMultiplier).toBe(1);
   });
 
   it("preserves global independent multiplier row order", () => {

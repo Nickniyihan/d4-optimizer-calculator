@@ -691,7 +691,9 @@ p {
   border-radius: 6px;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: 72px minmax(140px, 1fr) minmax(92px, 0.45fr) auto auto;
+  grid-template-columns:
+    72px minmax(140px, 1fr) minmax(130px, 0.7fr) minmax(92px, 0.45fr) auto
+    auto;
   padding: 0.55rem;
 }
 
@@ -717,7 +719,31 @@ p {
 .customDamageRuleRow {
   grid-template-columns:
     64px minmax(130px, 1fr) minmax(130px, 0.8fr) minmax(92px, 0.45fr)
-    minmax(150px, 0.9fr) minmax(92px, 0.45fr) auto;
+    minmax(150px, 0.9fr) minmax(130px, 0.7fr) minmax(92px, 0.45fr) auto;
+}
+
+.affixVisibilityTable {
+  min-width: 560px;
+}
+
+.affixVisibilityRow {
+  align-items: center;
+  background: #f8f4ed;
+  border: 1px solid #e5dccf;
+  border-radius: 6px;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: 72px minmax(190px, 1fr) minmax(120px, 0.5fr);
+  padding: 0.55rem;
+}
+
+.affixVisibilityHeader {
+  background: transparent;
+  border-color: transparent;
+  color: #5c5148;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding-bottom: 0;
 }
 
 .compactCheck {
@@ -746,7 +772,8 @@ p {
   display: grid;
   gap: 0.6rem;
   grid-template-columns:
-    72px minmax(140px, 1fr) minmax(92px, 0.4fr) auto auto auto;
+    72px minmax(140px, 1fr) minmax(130px, 0.7fr) minmax(92px, 0.4fr) auto auto
+    auto;
   padding: 0.55rem;
 }
 
@@ -774,7 +801,8 @@ p {
 }
 
 .itemMultiplierRawRow {
-  grid-template-columns: 72px minmax(180px, 1fr) minmax(100px, 0.45fr) auto;
+  grid-template-columns:
+    72px minmax(180px, 1fr) minmax(130px, 0.7fr) minmax(100px, 0.45fr) auto;
 }
 
 .capstoneNoneRow,
@@ -1016,8 +1044,8 @@ p {
   gap: 0.55rem;
   grid-template-columns:
     minmax(118px, 1.2fr)
-    repeat(5, minmax(72px, auto));
-  min-width: 560px;
+    repeat(6, minmax(72px, auto));
+  min-width: 650px;
   padding: 0.55rem;
 }
 
@@ -1046,6 +1074,10 @@ p {
 
 .positive {
   color: #247144;
+}
+
+.mutedText {
+  color: #7a6f65;
 }
 
 .negative {

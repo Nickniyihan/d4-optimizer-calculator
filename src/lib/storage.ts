@@ -12,6 +12,9 @@ import {
   EquipmentItem,
   GlobalIndependentMultiplier,
   ItemIndependentMultiplier,
+  normalizeAffixVisibility,
+  normalizeIndependentMultiplierTarget,
+  normalizePrimaryDamageType,
   sanitizeGlobalIndependentMultiplierValue,
   sanitizeItemIndependentMultiplierValue,
 } from "./damageModel";
@@ -74,11 +77,25 @@ export function normalizeImportedState(parsed: unknown): AppState {
     throw new Error("JSON is missing required app state fields.");
   }
 
+  const customPanelStats = Array.isArray(parsed.customPanelStats)
+    ? normalizeCustomPanelStatIds(
+        parsed.customPanelStats.filter(isRecord).map(readCustomPanelStat),
+      )
+    : [];
+
   return {
     version: 1,
     baseInputs: {
       ...DEFAULT_BASE_INPUTS,
       ...parsed.baseInputs,
+      primaryDamageType: normalizePrimaryDamageType(
+        parsed.baseInputs.primaryDamageType,
+      ),
+      baseDotMultiplier:
+        Number.isFinite(Number(parsed.baseInputs.baseDotMultiplier)) &&
+        Number(parsed.baseInputs.baseDotMultiplier) > 0
+          ? Number(parsed.baseInputs.baseDotMultiplier)
+          : DEFAULT_BASE_INPUTS.baseDotMultiplier,
       treatTypeAllAsOneBucket: Boolean(
         parsed.baseInputs.treatTypeAllAsOneBucket,
       ),
@@ -102,6 +119,10 @@ export function normalizeImportedState(parsed: unknown): AppState {
       ...DEFAULT_TYPICAL_ROLLS,
       ...(isRecord(parsed.typicalRolls) ? parsed.typicalRolls : {}),
     },
+    affixVisibility: normalizeAffixVisibility(
+      parsed.affixVisibility,
+      customPanelStats,
+    ),
     customStatReferenceValues: isRecord(parsed.customStatReferenceValues)
       ? Object.fromEntries(
           Object.entries(parsed.customStatReferenceValues).map(([key, value]) => [
@@ -110,13 +131,7 @@ export function normalizeImportedState(parsed: unknown): AppState {
           ]),
         )
       : {},
-    customPanelStats: Array.isArray(parsed.customPanelStats)
-      ? normalizeCustomPanelStatIds(
-          parsed.customPanelStats
-            .filter(isRecord)
-            .map(readCustomPanelStat),
-        )
-      : [],
+    customPanelStats,
     customDamageRules: Array.isArray(parsed.customDamageRules)
       ? normalizeCustomDamageRuleIds(
           parsed.customDamageRules
@@ -169,6 +184,9 @@ function readCustomDamageRule(
     output: isCustomDamageRuleOutput(value.output)
       ? value.output
       : "independentMultiplier",
+    independentMultiplierTarget: normalizeIndependentMultiplierTarget(
+      value.independentMultiplierTarget,
+    ),
   };
 }
 
@@ -183,6 +201,7 @@ function readGlobalIndependentMultiplier(
     valuePercent: sanitizeGlobalIndependentMultiplierValue(
       Number(value.valuePercent) || 0,
     ),
+    target: normalizeIndependentMultiplierTarget(value.target),
   };
 }
 
@@ -359,6 +378,7 @@ function readItemIndependentMultiplier(
     valuePercent: sanitizeItemIndependentMultiplierValue(
       Number(value.valuePercent) || 0,
     ),
+    target: normalizeIndependentMultiplierTarget(value.target),
   };
 }
 

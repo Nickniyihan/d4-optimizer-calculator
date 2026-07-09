@@ -1,5 +1,6 @@
 import {
   AppState,
+  DEFAULT_AFFIX_VISIBILITY,
   DEFAULT_BASE_INPUTS,
   DEFAULT_TYPICAL_ROLLS,
   EquipmentItem,
@@ -46,6 +47,7 @@ export function createDefaultState(names: EquipmentNameMap): AppState {
       },
     ],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
+    affixVisibility: { ...DEFAULT_AFFIX_VISIBILITY },
     customStatReferenceValues: {},
     customPanelStats: [],
     customDamageRules: [],
@@ -90,6 +92,7 @@ export function createGlovesComparisonPreset(names: EquipmentNameMap): AppState 
       },
     ],
     typicalRolls: { ...DEFAULT_TYPICAL_ROLLS },
+    affixVisibility: { ...DEFAULT_AFFIX_VISIBILITY },
     customStatReferenceValues: {},
     customPanelStats: [],
     customDamageRules: [],

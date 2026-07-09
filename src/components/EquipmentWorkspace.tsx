@@ -1,6 +1,7 @@
 import { UIEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   BaseInputs,
+  AffixVisibilityMap,
   CustomCalculationContext,
   CustomPanelStat,
   EquipmentItem,
@@ -22,6 +23,7 @@ interface EquipmentWorkspaceProps {
   capstoneBonus: number;
   defaultTargetQuality: number;
   customPanelStats: CustomPanelStat[];
+  affixVisibility: AffixVisibilityMap;
   customContext: CustomCalculationContext;
   listScrollTop: number;
   onListScrollTopChange: (scrollTop: number) => void;
@@ -35,6 +37,7 @@ export function EquipmentWorkspace({
   capstoneBonus,
   defaultTargetQuality,
   customPanelStats,
+  affixVisibility,
   customContext,
   listScrollTop,
   onListScrollTopChange,
@@ -189,6 +192,7 @@ export function EquipmentWorkspace({
               baseInputs={baseInputs}
               equipment={equipment}
               customPanelStats={customPanelStats}
+              affixVisibility={affixVisibility}
               customContext={customContext}
               onChange={(nextItem) =>
                 onChange(

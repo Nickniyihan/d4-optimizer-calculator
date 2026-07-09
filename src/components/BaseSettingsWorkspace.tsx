@@ -1,16 +1,25 @@
 import { useState } from "react";
 import {
   AFFIX_TYPES,
+  AFFIX_CATEGORY_BY_TYPE,
+  AffixCategory,
+  AffixVisibilityMap,
   BaseInputs,
   CustomDamageRule,
   CustomDamageRuleOutput,
   CustomPanelStat,
   GlobalIndependentMultiplier,
+  IndependentMultiplierTarget,
+  PrimaryDamageType,
   TypicalRolls,
+  applyAffixVisibilityPreset,
   createCustomDamageRule,
   createCustomPanelStat,
   createGlobalIndependentMultiplier,
+  getCustomStatVisibilityKey,
   globalIndependentMultiplierRowFactor,
+  isAffixVisible,
+  normalizeAffixVisibility,
   sanitizeGlobalIndependentMultiplierValue,
 } from "../lib/damageModel";
 import { Translation } from "../i18n";
@@ -38,6 +47,7 @@ interface BaseSettingsWorkspaceProps {
   t: Translation;
   baseInputs: BaseInputs;
   typicalRolls: TypicalRolls;
+  affixVisibility: AffixVisibilityMap;
   customStatReferenceValues: Record<string, number>;
   customPanelStats: CustomPanelStat[];
   customDamageRules: CustomDamageRule[];
@@ -51,6 +61,7 @@ interface BaseSettingsWorkspaceProps {
   classPreset: ClassPreset;
   onBaseInputsChange: (baseInputs: BaseInputs) => void;
   onTypicalRollsChange: (typicalRolls: TypicalRolls) => void;
+  onAffixVisibilityChange: (affixVisibility: AffixVisibilityMap) => void;
   onCustomStatReferenceValuesChange: (values: Record<string, number>) => void;
   onCustomPanelStatsChange: (stats: CustomPanelStat[]) => void;
   onCustomDamageRulesChange: (rules: CustomDamageRule[]) => void;
@@ -78,6 +89,7 @@ export function BaseSettingsWorkspace({
   t,
   baseInputs,
   typicalRolls,
+  affixVisibility,
   customStatReferenceValues,
   customPanelStats,
   customDamageRules,
@@ -91,6 +103,7 @@ export function BaseSettingsWorkspace({
   classPreset,
   onBaseInputsChange,
   onTypicalRollsChange,
+  onAffixVisibilityChange,
   onCustomStatReferenceValuesChange,
   onCustomPanelStatsChange,
   onCustomDamageRulesChange,
@@ -104,6 +117,8 @@ export function BaseSettingsWorkspace({
   const [customPanelStatsExpanded, setCustomPanelStatsExpanded] =
     useState(false);
   const [customDamageRulesExpanded, setCustomDamageRulesExpanded] =
+    useState(false);
+  const [affixVisibilityExpanded, setAffixVisibilityExpanded] =
     useState(false);
   const updatePercentField = (
     field:
@@ -129,6 +144,7 @@ export function BaseSettingsWorkspace({
       | "baseWeaponDamageMax"
       | "baseMainSkillRank"
       | "mainSkillBaseMultiplier"
+      | "baseDotMultiplier"
       | "mainStatCoefficient"
       | "baseCritMultiplier"
       | "baseVulnerableMultiplier"
@@ -214,6 +230,27 @@ export function BaseSettingsWorkspace({
             onChange={(value) =>
               updateNumberField("mainSkillBaseMultiplier", value)
             }
+          />
+          <label className="field" title={t.baseFields.primaryDamageTypeHelp}>
+            <span>{t.baseFields.primaryDamageType}</span>
+            <select
+              value={baseInputs.primaryDamageType}
+              onChange={(event) =>
+                onBaseInputsChange({
+                  ...baseInputs,
+                  primaryDamageType: event.target.value as PrimaryDamageType,
+                })
+              }
+            >
+              <option value="direct">{t.baseFields.directDamage}</option>
+              <option value="dot">{t.baseFields.damageOverTime}</option>
+            </select>
+          </label>
+          <NumberField
+            label={t.baseFields.baseDotMultiplier}
+            title={t.baseFields.baseDotMultiplierHelp}
+            value={baseInputs.baseDotMultiplier}
+            onChange={(value) => updateNumberField("baseDotMultiplier", value)}
           />
         </div>
       </section>
@@ -431,6 +468,38 @@ export function BaseSettingsWorkspace({
             <span>{t.settings.autoSaveCurrentBuild}</span>
           </label>
         </div>
+      </section>
+
+      <section className="panel globalMultiplierPanel">
+        <button
+          type="button"
+          className="globalMultiplierSummary"
+          onClick={() => setAffixVisibilityExpanded((expanded) => !expanded)}
+          title={affixVisibilityExpanded ? t.settings.collapse : t.settings.expand}
+        >
+          <span>
+            {formatAffixVisibilitySummary(
+              t,
+              affixVisibility,
+              customPanelStats,
+            )}
+          </span>
+          <strong>
+            {affixVisibilityExpanded ? t.settings.collapse : t.settings.expand}
+          </strong>
+        </button>
+
+        {affixVisibilityExpanded && (
+          <div className="globalMultiplierContent">
+            <p>{t.settings.affixVisibilityHelp}</p>
+            <AffixVisibilityTable
+              t={t}
+              rowsVisibility={affixVisibility}
+              customPanelStats={customPanelStats}
+              onChange={onAffixVisibilityChange}
+            />
+          </div>
+        )}
       </section>
 
       <section className="panel globalMultiplierPanel">
@@ -659,6 +728,7 @@ function CustomDamageRulesTable({
         <span>{t.settings.sourceCustomStat}</span>
         <span>{t.settings.damagePerPoint}</span>
         <span>{t.settings.outputType}</span>
+        <span>{t.settings.independentMultiplierTarget}</span>
         <span>{t.settings.currentEffect}</span>
         <span>{t.settings.actions}</span>
       </div>
@@ -718,7 +788,28 @@ function CustomDamageRulesTable({
               </option>
             ))}
           </select>
-          <strong>{formatRuleEffect(row, effects[row.id])}</strong>
+          {row.output === "independentMultiplier" ? (
+            <select
+              value={row.independentMultiplierTarget ?? "all"}
+              title={t.settings.independentMultiplierTarget}
+              onChange={(event) =>
+                updateRow({
+                  ...row,
+                  independentMultiplierTarget: event.target
+                    .value as IndependentMultiplierTarget,
+                })
+              }
+            >
+              {independentMultiplierTargets.map((target) => (
+                <option value={target} key={target}>
+                  {getIndependentMultiplierTargetLabel(t, target)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="mutedText">-</span>
+          )}
+          <strong>{formatRuleEffect(t, row, effects[row.id])}</strong>
           <RowActions
             t={t}
             index={index}
@@ -740,6 +831,136 @@ function CustomDamageRulesTable({
       </button>
     </div>
   );
+}
+
+function AffixVisibilityTable({
+  t,
+  rowsVisibility,
+  customPanelStats,
+  onChange,
+}: {
+  t: Translation;
+  rowsVisibility: AffixVisibilityMap;
+  customPanelStats: CustomPanelStat[];
+  onChange: (affixVisibility: AffixVisibilityMap) => void;
+}) {
+  const normalized = normalizeAffixVisibility(rowsVisibility, customPanelStats);
+  const updateKey = (key: string, visible: boolean) => {
+    onChange({ ...normalized, [key]: visible });
+  };
+  const enabledCustomStats = customPanelStats.filter(
+    (stat) => stat.enabled !== false,
+  );
+
+  return (
+    <div className="globalMultiplierTable affixVisibilityTable">
+      <div className="buttonRow">
+        <button
+          type="button"
+          className="secondaryButton"
+          onClick={() =>
+            onChange(applyAffixVisibilityPreset("all", enabledCustomStats))
+          }
+        >
+          {t.settings.showAllAffixes}
+        </button>
+        <button
+          type="button"
+          className="secondaryButton"
+          onClick={() =>
+            onChange(applyAffixVisibilityPreset("direct", enabledCustomStats))
+          }
+        >
+          {t.settings.directCommonAffixes}
+        </button>
+        <button
+          type="button"
+          className="secondaryButton"
+          onClick={() =>
+            onChange(applyAffixVisibilityPreset("dot", enabledCustomStats))
+          }
+        >
+          {t.settings.dotCommonAffixes}
+        </button>
+      </div>
+      <div className="affixVisibilityRow affixVisibilityHeader">
+        <span>{t.settings.showAffix}</span>
+        <span>{t.settings.affixName}</span>
+        <span>{t.settings.affixCategory}</span>
+      </div>
+      {AFFIX_TYPES.map((type) => (
+        <div className="affixVisibilityRow" key={type}>
+          <label className="compactCheck">
+            <input
+              type="checkbox"
+              checked={isAffixVisible(normalized, type)}
+              onChange={(event) => updateKey(type, event.target.checked)}
+            />
+            <span className="srOnly">{t.settings.showAffix}</span>
+          </label>
+          <span>{t.affix.types[type]}</span>
+          <span>{getAffixCategoryLabel(t, AFFIX_CATEGORY_BY_TYPE[type])}</span>
+        </div>
+      ))}
+      {enabledCustomStats.map((stat) => {
+        const key = getCustomStatVisibilityKey(stat.id);
+        const label = stat.affixLabel.trim() || stat.name.trim() || t.settings.customAffixFallback;
+
+        return (
+          <div className="affixVisibilityRow" key={key}>
+            <label className="compactCheck">
+              <input
+                type="checkbox"
+                checked={normalized[key] !== false}
+                onChange={(event) => updateKey(key, event.target.checked)}
+              />
+              <span className="srOnly">{t.settings.showAffix}</span>
+            </label>
+            <span>+{label}</span>
+            <span>{getAffixCategoryLabel(t, "custom")}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function getAffixCategoryLabel(
+  t: Translation,
+  category: AffixCategory,
+): string {
+  switch (category) {
+    case "basic":
+      return t.settings.affixCategoryBasic;
+    case "direct":
+      return t.settings.affixCategoryDirect;
+    case "vulnerable":
+      return t.settings.affixCategoryVulnerable;
+    case "dot":
+      return t.settings.affixCategoryDot;
+    case "general":
+      return t.settings.affixCategoryGeneral;
+    case "custom":
+      return t.settings.affixCategoryCustom;
+  }
+}
+
+function formatAffixVisibilitySummary(
+  t: Translation,
+  affixVisibility: AffixVisibilityMap,
+  customPanelStats: CustomPanelStat[],
+): string {
+  const normalized = normalizeAffixVisibility(affixVisibility, customPanelStats);
+  const customKeys = customPanelStats
+    .filter((stat) => stat.enabled !== false)
+    .map((stat) => getCustomStatVisibilityKey(stat.id));
+  const keys = [...AFFIX_TYPES, ...customKeys];
+  const visible = keys.filter((key) => normalized[key] !== false).length;
+  const summary = t.settings.affixVisibilitySummary
+    .replace("{visible}", String(visible))
+    .replace("{total}", String(keys.length));
+
+  return `${t.settings.affixVisibility}: ${summary}`;
 }
 
 function RowActions({
@@ -823,15 +1044,58 @@ function getOutputLabel(
 }
 
 function formatRuleEffect(
+  t: Translation,
   row: CustomDamageRule,
   effect?: { rulePercent: number; factor: number },
 ): string {
   const percent = effect?.rulePercent ?? 0;
 
   return row.output === "independentMultiplier"
-    ? `x${formatNumber(effect?.factor ?? 1, 3)}`
+    ? `${getIndependentMultiplierTargetShortLabel(
+        t,
+        row.independentMultiplierTarget ?? "all",
+      )} x${formatNumber(effect?.factor ?? 1, 3)}`
     : `${formatNumber(percent, 2)}%`;
 }
+
+function getIndependentMultiplierTargetLabel(
+  t: Translation,
+  target: IndependentMultiplierTarget,
+): string {
+  switch (target) {
+    case "crit":
+      return t.settings.targetCritDamage;
+    case "vulnerable":
+      return t.settings.targetVulnerableDamage;
+    case "dot":
+      return t.settings.targetDotDamage;
+    case "all":
+      return t.settings.targetAllDamage;
+  }
+}
+
+function getIndependentMultiplierTargetShortLabel(
+  t: Translation,
+  target: IndependentMultiplierTarget,
+): string {
+  switch (target) {
+    case "crit":
+      return t.settings.targetCritDamageShort;
+    case "vulnerable":
+      return t.settings.targetVulnerableDamageShort;
+    case "dot":
+      return t.settings.targetDotDamageShort;
+    case "all":
+      return t.settings.targetAllDamageShort;
+  }
+}
+
+const independentMultiplierTargets: IndependentMultiplierTarget[] = [
+  "all",
+  "crit",
+  "vulnerable",
+  "dot",
+];
 
 function formatCustomReferenceLabel(
   t: Translation,
@@ -875,6 +1139,7 @@ function GlobalIndependentMultiplierTable({
       <div className="globalMultiplierRow globalMultiplierHeader">
         <span>{t.settings.enabled}</span>
         <span>{t.settings.name}</span>
+        <span>{t.settings.independentMultiplierTarget}</span>
         <span>{t.settings.increase}</span>
         <span>{t.settings.multiplier}</span>
         <span>{t.settings.actions}</span>
@@ -896,6 +1161,22 @@ function GlobalIndependentMultiplierTable({
             placeholder={t.settings.globalMultiplier}
             onChange={(event) => updateRow({ ...row, name: event.target.value })}
           />
+          <select
+            value={row.target ?? "all"}
+            title={t.settings.independentMultiplierTarget}
+            onChange={(event) =>
+              updateRow({
+                ...row,
+                target: event.target.value as IndependentMultiplierTarget,
+              })
+            }
+          >
+            {independentMultiplierTargets.map((target) => (
+              <option value={target} key={target}>
+                {getIndependentMultiplierTargetLabel(t, target)}
+              </option>
+            ))}
+          </select>
           <input
             type="number"
             value={row.valuePercent}

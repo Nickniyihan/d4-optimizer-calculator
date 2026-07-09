@@ -6,6 +6,7 @@ import {
   DamageBreakdown,
   FactorChange,
   GearTotals,
+  IndependentMultiplierFactors,
   MarginalGain,
   TypicalRolls,
   calculateMarginalGains,
@@ -33,7 +34,7 @@ interface DashboardProps {
   breakdown: DamageBreakdown;
   gearTotals: GearTotals;
   typicalRolls: TypicalRolls;
-  globalIndependentMultiplierFactor: number;
+  globalIndependentMultiplierFactor: IndependentMultiplierFactors;
   customPanelStats: CustomPanelStat[];
   customContext: CustomCalculationContext;
   comparison: ComparisonBreakdown | null;
@@ -97,7 +98,7 @@ export function Dashboard({
             typicalRolls={typicalRolls}
             globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
             equipmentIndependentMultiplierFactor={
-              breakdown.equipmentIndependentMultiplierFactor
+              breakdown.equipmentIndependentMultiplierFactors
             }
             customPanelStats={customPanelStats}
             customContext={customContext}
@@ -156,6 +157,15 @@ function StatsDashboard({
           highlight
         />
         <DashboardMetric
+          label={t.dashboardLabels.damageMode}
+          title={t.baseFields.primaryDamageTypeHelp}
+          value={
+            breakdown.primaryDamageType === "dot"
+              ? t.baseFields.damageOverTime
+              : t.baseFields.directDamage
+          }
+        />
+        <DashboardMetric
           label={t.totals.totalCritChance}
           value={formatPercent(breakdown.totalCritChance)}
         />
@@ -206,6 +216,52 @@ function StatsDashboard({
           />
         )}
         <DashboardMetric
+          label={t.formula.independentMultiplierAllDamage}
+          title={t.formula.tooltips.independentMultiplierAllDamage}
+          value={formatFactor(
+            breakdown.combinedIndependentMultiplierFactors.all,
+            language,
+          )}
+        />
+        {(breakdown.primaryDamageType === "direct" ||
+          breakdown.combinedIndependentMultiplierFactors.crit !== 1) && (
+          <DashboardMetric
+            label={t.formula.independentMultiplierCritDamage}
+            title={t.formula.tooltips.independentMultiplierCritDamage}
+            value={`${formatFactor(
+              breakdown.combinedIndependentMultiplierFactors.crit,
+              language,
+            )}${
+              breakdown.primaryDamageType === "dot"
+                ? ` (${t.dashboardLabels.inactiveInCurrentMode})`
+                : ""
+            }`}
+          />
+        )}
+        <DashboardMetric
+          label={t.formula.independentMultiplierVulnerableDamage}
+          title={t.formula.tooltips.independentMultiplierVulnerableDamage}
+          value={formatFactor(
+            breakdown.combinedIndependentMultiplierFactors.vulnerable,
+            language,
+          )}
+        />
+        {(breakdown.primaryDamageType === "dot" ||
+          breakdown.combinedIndependentMultiplierFactors.dot !== 1) && (
+          <DashboardMetric
+            label={t.formula.independentMultiplierDotDamage}
+            title={t.formula.tooltips.independentMultiplierDotDamage}
+            value={`${formatFactor(
+              breakdown.combinedIndependentMultiplierFactors.dot,
+              language,
+            )}${
+              breakdown.primaryDamageType === "direct"
+                ? ` (${t.dashboardLabels.inactiveInCurrentMode})`
+                : ""
+            }`}
+          />
+        )}
+        <DashboardMetric
           label={t.totals.effectiveWeaponDamage}
           value={
             breakdown.baseAverageWeaponDamage > 0
@@ -237,6 +293,23 @@ function StatsDashboard({
           label={t.totals.totalGenericAdditive}
           value={formatPercent(breakdown.totalGenericAdditive)}
         />
+        {breakdown.primaryDamageType === "dot" && (
+          <>
+            <DashboardMetric
+              label={t.totals.totalDotDamageAdditive}
+              value={formatPercent(breakdown.totalDotDamageAdditive)}
+            />
+            <DashboardMetric
+              label={t.totals.totalDotDamageMultiplier}
+              value={formatPercent(breakdown.totalDotDamageMultiplier)}
+            />
+            <DashboardMetric
+              label={t.formula.dotTypeFactor}
+              title={t.formula.tooltips.dotTypeFactor}
+              value={formatFactor(breakdown.dotTypeFactor, language)}
+            />
+          </>
+        )}
       </div>
 
       {comparison && (
@@ -312,8 +385,8 @@ function MarginalDashboard({
   baseInputs: BaseInputs;
   gearTotals: GearTotals;
   typicalRolls: TypicalRolls;
-  globalIndependentMultiplierFactor: number;
-  equipmentIndependentMultiplierFactor: number;
+  globalIndependentMultiplierFactor: IndependentMultiplierFactors;
+  equipmentIndependentMultiplierFactor: IndependentMultiplierFactors;
   customPanelStats: CustomPanelStat[];
   customContext: CustomCalculationContext;
 }) {
@@ -422,6 +495,21 @@ const factorKeys = [
   "totalDamageFactor",
 ] as const;
 
+const dotFactorKeys = [
+  "weaponDamageFactor",
+  "skillDamageFactor",
+  "globalIndependentMultiplierFactor",
+  "equipmentIndependentMultiplierFactor",
+  "customIndependentMultiplierFactor",
+  "mainStatFactor",
+  "vulnerableFactor",
+  "typeAllMultiplierFactor",
+  "dotTypeFactor",
+  "additiveFactor",
+  "expectedCombatFactor",
+  "totalDamageFactor",
+] as const;
+
 function BucketBreakdownTable({
   t,
   language,
@@ -433,6 +521,8 @@ function BucketBreakdownTable({
   breakdown: DamageBreakdown;
   comparison: ComparisonBreakdown | null;
 }) {
+  const keys = breakdown.primaryDamageType === "dot" ? dotFactorKeys : factorKeys;
+
   return (
     <div className="bucketTable">
       <div
@@ -458,7 +548,7 @@ function BucketBreakdownTable({
         )}
       </div>
 
-      {factorKeys.map((key) => {
+      {keys.map((key) => {
         const change = comparison?.factorChanges[key] as FactorChange | undefined;
         const currentValue = comparison ? change?.before : breakdown[key];
         const afterValue = change?.after;
@@ -490,6 +580,57 @@ function BucketBreakdownTable({
           </div>
         );
       })}
+      {(
+        [
+          ["all", "independentMultiplierAllDamage"],
+          ["crit", "independentMultiplierCritDamage"],
+          ["vulnerable", "independentMultiplierVulnerableDamage"],
+          ["dot", "independentMultiplierDotDamage"],
+        ] as const
+      ).map(([target, labelKey]) => {
+        const beforeValue = comparison
+          ? comparison.before.combinedIndependentMultiplierFactors[target]
+          : breakdown.combinedIndependentMultiplierFactors[target];
+        const afterValue =
+          comparison?.after.combinedIndependentMultiplierFactors[target];
+        const change = comparison
+          ? {
+              before: beforeValue,
+              after: afterValue ?? beforeValue,
+              relativeChange:
+                beforeValue === 0
+                  ? 0
+                  : ((afterValue ?? beforeValue) - beforeValue) / beforeValue,
+            }
+          : null;
+        const changeClass =
+          change && change.relativeChange > 0
+            ? "positive"
+            : change && change.relativeChange < 0
+              ? "negative"
+              : "neutral";
+
+        return (
+          <div
+            className={comparison ? "bucketRow compareBucketRow" : "bucketRow"}
+            key={target}
+            title={t.formula.tooltips[labelKey]}
+          >
+            <span className="truncate" title={t.formula[labelKey]}>
+              {t.formula[labelKey]}
+            </span>
+            <strong>{formatFactor(beforeValue, language)}</strong>
+            {comparison && (
+              <>
+                <strong>{formatFactor(afterValue ?? beforeValue, language)}</strong>
+                <span className={changeClass}>
+                  {formatSignedPercent(change?.relativeChange ?? 0)}
+                </span>
+              </>
+            )}
+          </div>
+        );
+      })}
       <StateContributionTable t={t} language={language} breakdown={breakdown} />
     </div>
   );
@@ -504,6 +645,56 @@ function StateContributionTable({
   language: Language;
   breakdown: DamageBreakdown;
 }) {
+  if (breakdown.primaryDamageType === "dot") {
+    return (
+      <div className="stateContributionTable">
+        <h3>{t.dashboardLabels.stateContributions}</h3>
+        <p>{t.dashboardLabels.dotConditionalNote}</p>
+        <div className="stateContributionRow dotStateContributionHeader">
+          <span title={t.dashboardLabels.stateColumnHelp}>
+            {t.dashboardLabels.state}
+          </span>
+          <span title={t.dashboardLabels.probabilityColumnHelp}>
+            {t.dashboardLabels.probability}
+          </span>
+          <span title={t.dashboardLabels.dotStateAdditiveColumnHelp}>
+            {t.dashboardLabels.additiveFactor}
+          </span>
+          <span title={t.dashboardLabels.vulnerableMultiplierColumnHelp}>
+            {t.dashboardLabels.vulnerableMultiplier}
+          </span>
+          <span title={t.dashboardLabels.dotMultiplierColumnHelp}>
+            {t.dashboardLabels.dotMultiplier}
+          </span>
+          <span title={t.dashboardLabels.targetedIndependentMultiplier}>
+            {t.dashboardLabels.targetedIndependentMultiplier}
+          </span>
+          <span title={t.dashboardLabels.dotStateContributionColumnHelp}>
+            {t.dashboardLabels.contribution}
+          </span>
+        </div>
+        {breakdown.stateBreakdown.map((state) => (
+          <div
+            className="stateContributionRow dotStateContributionHeader"
+            key={`dot-${state.vulnerable}`}
+          >
+            <span>
+              {state.vulnerable
+                ? t.dashboardLabels.vulnerable
+                : t.dashboardLabels.notVulnerable}
+            </span>
+            <strong>{formatPercent(state.probability)}</strong>
+            <strong>{formatFactor(state.additiveFactor, language)}</strong>
+            <strong>{formatFactor(state.vulnerableMultiplier, language)}</strong>
+            <strong>{formatFactor(state.dotMultiplier ?? 1, language)}</strong>
+            <strong>{formatFactor(state.independentMultiplier, language)}</strong>
+            <strong>{formatFactor(state.contribution, language)}</strong>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="stateContributionTable">
       <h3>{t.dashboardLabels.stateContributions}</h3>
@@ -524,6 +715,9 @@ function StateContributionTable({
         <span title={t.dashboardLabels.vulnerableMultiplierColumnHelp}>
           {t.dashboardLabels.vulnerableMultiplier}
         </span>
+        <span title={t.dashboardLabels.targetedIndependentMultiplier}>
+          {t.dashboardLabels.targetedIndependentMultiplier}
+        </span>
         <span title={t.dashboardLabels.stateContributionColumnHelp}>
           {t.dashboardLabels.contribution}
         </span>
@@ -538,6 +732,7 @@ function StateContributionTable({
           <strong>{formatFactor(state.additiveFactor, language)}</strong>
           <strong>{formatFactor(state.critMultiplier, language)}</strong>
           <strong>{formatFactor(state.vulnerableMultiplier, language)}</strong>
+          <strong>{formatFactor(state.independentMultiplier, language)}</strong>
           <strong>{formatFactor(state.contribution, language)}</strong>
         </div>
       ))}

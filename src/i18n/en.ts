@@ -114,6 +114,20 @@ export const en = {
       "Custom Independent Multiplier comes from custom damage rules with output type Independent Multiplier, calculated as product(1 + rule damage%).",
     customDamageRuleBucketHelp:
       "Custom damage rules can convert custom panel stats into generic additive damage, +Crit Damage, +Vulnerable Damage, or an independent multiplier. Additive outputs are merged into their corresponding additive buckets; independent outputs are shown as a separate factor.",
+    damageMode: "Damage Mode",
+    notVulnerable: "Not Vulnerable",
+    vulnerable: "Vulnerable",
+    dotMultiplier: "DoT Multiplier",
+    dotMultiplierColumnHelp:
+      "DoT multiplier = base DoT multiplier x (1 + total x Damage over Time Multiplier).",
+    dotStateAdditiveColumnHelp:
+      "DoT additive factor = 1 + generic additive damage + +Damage over Time. Vulnerable state also receives +Vulnerable Damage.",
+    dotStateContributionColumnHelp:
+      "DoT contribution = probability x additive factor x vulnerable multiplier x DoT multiplier. Expected Combat Factor is the sum of the two DoT state contributions.",
+    dotConditionalNote:
+      "Damage over Time does not use crit states in this model. The DoT table only separates not-vulnerable and vulnerable states; Type/All multipliers are still applied outside this state table exactly once.",
+    targetedIndependentMultiplier: "Targeted Independent",
+    inactiveInCurrentMode: "Inactive in current mode",
     sourceQuickDelta: "Source: Manual Changes",
     sourceCandidateItem: "Source: Candidate Item",
     sourceManualChanges: "Source: Manual Changes",
@@ -163,6 +177,14 @@ export const en = {
     mainSkillBaseMultiplier: "Main Skill Base Damage Multiplier (%)",
     mainSkillBaseMultiplierHelp:
       "Enter the base damage multiplier of the main damage skill, such as \"deals 250% damage\" from the skill tooltip. The default 100% preserves the previous result.",
+    primaryDamageType: "Primary Damage Type",
+    primaryDamageTypeHelp:
+      "Choose whether the main damage being compared is Direct Damage or Damage over Time. Direct Damage keeps the crit/vulnerable model. Damage over Time ignores crit and uses the DoT state formula.",
+    directDamage: "Direct Damage",
+    damageOverTime: "Damage over Time",
+    baseDotMultiplier: "Base DoT Multiplier",
+    baseDotMultiplierHelp:
+      "Base multiplier for the main Damage over Time effect. Leave at 1 for a relative comparison unless you want the Damage Index to include a known DoT base coefficient.",
     baseCritMultiplier: "Base Crit Multiplier (game default)",
     baseVulnerableMultiplier: "Base Vulnerable Multiplier (game default)",
     critChanceCap: "Crit Chance Cap (game default) (%)",
@@ -215,6 +237,32 @@ export const en = {
       "Custom Independent Multiplier comes from custom damage rules with output type Independent Multiplier, calculated as product(1 + rule damage%).",
     customDamageRuleBucketHelp:
       "Custom damage rules can convert custom panel stats into generic additive damage, +Crit Damage, +Vulnerable Damage, or an independent multiplier. Additive outputs are merged into their corresponding additive buckets; independent outputs are shown as a separate factor.",
+    affixVisibility: "Affix Visibility",
+    affixVisibilityHelp:
+      "Controls which affixes appear in add/edit dropdown menus. This only affects dropdown visibility; it does not delete existing affixes or affect damage calculations.",
+    affixVisibilitySummary: "Showing {visible} / {total} affixes",
+    showAllAffixes: "Show All",
+    directCommonAffixes: "Direct Common",
+    dotCommonAffixes: "DoT Common",
+    useCurrentModeAffixes: "Current Mode Preset",
+    showAffix: "Show",
+    affixName: "Affix",
+    affixCategory: "Category",
+    affixCategoryBasic: "Basic",
+    affixCategoryDirect: "Direct",
+    affixCategoryVulnerable: "Vulnerable",
+    affixCategoryDot: "Damage over Time",
+    affixCategoryGeneral: "General",
+    affixCategoryCustom: "Custom",
+    independentMultiplierTarget: "Target",
+    targetAllDamage: "All Damage",
+    targetCritDamage: "Critical Strike Damage",
+    targetVulnerableDamage: "Vulnerable Damage",
+    targetDotDamage: "Damage over Time",
+    targetAllDamageShort: "All",
+    targetCritDamageShort: "Crit",
+    targetVulnerableDamageShort: "Vulnerable",
+    targetDotDamageShort: "DoT",
     invalidCustomStat: "Invalid Custom Panel Stat",
     customAffixFallback: "Custom Affix",
     customStatReferenceLabel: "{label} Reference",
@@ -269,6 +317,8 @@ export const en = {
       additiveDamage: "+ Generic Additive Damage Reference",
       critDamageAdditive: "+ Crit Damage Reference",
       vulnerableDamageAdditive: "+ Vulnerable Damage Reference",
+      dotDamageAdditive: "+ Damage over Time Reference",
+      dotDamageMultiplier: "x Damage over Time Mult Reference",
       skillRanks: "+ Skill Ranks Reference",
       weaponDamage: "Weapon Damage Reference",
     },
@@ -379,6 +429,8 @@ export const en = {
       additiveDamage: "+ Generic Additive Damage",
       critDamageAdditive: "+ Critical Strike Damage",
       vulnerableDamageAdditive: "+ Vulnerable Damage",
+      dotDamageAdditive: "+ Damage over Time",
+      dotDamageMultiplier: "x Damage over Time Multiplier",
       skillRanks: "+ Skill Ranks",
       weaponDamage: "Weapon Damage",
       customStat: "Custom Affix",
@@ -392,6 +444,8 @@ export const en = {
       additiveDamage: "+ Generic Additive Damage (%)",
       critDamageAdditive: "+ Critical Strike Damage (%)",
       vulnerableDamageAdditive: "+ Vulnerable Damage (%)",
+      dotDamageAdditive: "+ Damage over Time (%)",
+      dotDamageMultiplier: "x Damage over Time Multiplier (%)",
       skillRanks: "+ Skill Ranks",
       weaponDamage: "Weapon Damage",
       customStat: "Custom Affix",
@@ -408,6 +462,8 @@ export const en = {
     totalVulnerableDamageMultiplier: "Total x Vulnerable Damage Mult",
     totalCritDamageAdditive: "Total + Critical Strike Damage",
     totalVulnerableDamageAdditive: "Total + Vulnerable Damage",
+    totalDotDamageAdditive: "Total + Damage over Time",
+    totalDotDamageMultiplier: "Total x Damage over Time Mult",
     totalGenericAdditive: "Total Generic Additive",
     totalAdditivePool: "Total Generic Additive",
     effectiveWeaponDamage: "Effective Weapon Damage",
@@ -419,10 +475,18 @@ export const en = {
     globalIndependentMultiplierFactor: "Global Independent Multiplier",
     equipmentIndependentMultiplierFactor: "Equipment Independent Multiplier",
     customIndependentMultiplierFactor: "Custom Independent Multiplier",
+    independentMultiplierAllDamage: "Independent Multiplier (All Damage)",
+    independentMultiplierCritDamage:
+      "Independent Multiplier (Critical Strike Damage)",
+    independentMultiplierVulnerableDamage:
+      "Independent Multiplier (Vulnerable Damage)",
+    independentMultiplierDotDamage:
+      "Independent Multiplier (Damage over Time)",
     mainStatFactor: "MainStatFactor",
     critFactor: "CritFactor",
     vulnerableFactor: "VulnerableFactor",
     typeAllMultiplierFactor: "TypeAllFactor",
+    dotTypeFactor: "DoTFactor",
     additiveFactor: "AdditiveFactor",
     expectedCombatFactor: "ExpectedCombatFactor",
     totalDamageFactor: "DamageIndex",
@@ -442,16 +506,28 @@ export const en = {
         "Equipment Independent Multiplier = the product of Independent / Aspect multiplier rows on all enabled items. Each row is calculated as 1 + increase%. In candidate item comparison, the replaced item's multipliers are replaced as well.",
       customIndependentMultiplierFactor:
         "Custom Independent Multiplier comes from custom damage rules with output type Independent Multiplier, calculated as product(1 + rule damage%).",
+      independentMultiplierAllDamage:
+        "All Damage independent multipliers apply to every Direct Damage and Damage over Time state.",
+      independentMultiplierCritDamage:
+        "Critical Strike Damage independent multipliers apply only to crit states in Direct Damage mode. They are inactive in Damage over Time mode.",
+      independentMultiplierVulnerableDamage:
+        "Vulnerable Damage independent multipliers apply only while the target is vulnerable in Direct Damage and Damage over Time modes.",
+      independentMultiplierDotDamage:
+        "Damage over Time independent multipliers apply to all DoT states and are inactive in Direct Damage mode.",
       critFactor:
         "(reference) (1 - totalCritChance) + totalCritChance * baseCritMultiplier * (1 + totalCritDamageMultiplier)",
       vulnerableFactor:
         "(reference) (1 - vulnerableUptime) + vulnerableUptime * baseVulnerableMultiplier * (1 + totalVulnerableDamageMultiplier)",
       typeAllMultiplierFactor: "1 + gearTypeAllDamageMultiplier",
+      dotTypeFactor:
+        "DoT Factor = base DoT multiplier x (1 + total x Damage over Time Multiplier). Only used when Primary Damage Type is Damage over Time.",
       additiveFactor: "1 + totalGenericAdditive",
       expectedCombatFactor:
-        "Sum over crit/vulnerable states: probability * state additive factor * crit multiplier * vulnerable multiplier",
+        "Direct Damage: sum over crit/vulnerable states. Damage over Time: sum over not-vulnerable/vulnerable DoT states.",
       totalDamageFactor:
         "Damage Index = effective weapon damage x skill damage factor x damage factors. It is for gear comparison and is not the exact final in-game damage number. If base weapon damage is missing or weapon damage is disabled, it falls back to a relative index.",
+      dotModeHelp:
+        "Damage over Time mode ignores crit chance, +Crit Damage, and x Crit Damage. It uses generic additive damage, +Damage over Time, vulnerable additive/multiplier while vulnerable, and the DoT multiplier.",
       quality:
         "Normal item affixes use additive scaling: finalValue = baseRoll * (1 + qualityBonus + greaterAffixBonus + capstoneBonus). Extra / Gems and Independent / Aspect multipliers ignore this scaling.",
       capstoneBonus:

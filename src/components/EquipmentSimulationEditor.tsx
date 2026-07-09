@@ -2,11 +2,14 @@ import { useState } from "react";
 import {
   Affix,
   AffixGroup,
+  AffixVisibilityMap,
   BaseInputs,
   CustomCalculationContext,
   CustomPanelStat,
   DeltaRow,
   EquipmentItem,
+  IndependentMultiplierFactors,
+  IndependentMultiplierTarget,
   ItemIndependentMultiplier,
   calculateEquipmentSetupBreakdown,
   calculateItemIndependentMultiplierContribution,
@@ -45,13 +48,37 @@ interface EquipmentSimulationEditorProps {
   equipment?: EquipmentItem[];
   contributionHelp?: string;
   capstoneDeltas?: DeltaRow[];
-  globalIndependentMultiplierFactor?: number;
+  globalIndependentMultiplierFactor?: number | IndependentMultiplierFactors;
   customPanelStats?: CustomPanelStat[];
+  affixVisibility?: AffixVisibilityMap;
   customContext?: CustomCalculationContext;
   getAffixContribution?: (affix: Affix, group: AffixGroup) => number;
   getItemIndependentContribution?: (
     multiplier: ItemIndependentMultiplier,
   ) => number;
+}
+
+const independentMultiplierTargets: IndependentMultiplierTarget[] = [
+  "all",
+  "crit",
+  "vulnerable",
+  "dot",
+];
+
+function getIndependentMultiplierTargetLabel(
+  t: Translation,
+  target: IndependentMultiplierTarget,
+): string {
+  switch (target) {
+    case "crit":
+      return t.settings.targetCritDamage;
+    case "vulnerable":
+      return t.settings.targetVulnerableDamage;
+    case "dot":
+      return t.settings.targetDotDamage;
+    case "all":
+      return t.settings.targetAllDamage;
+  }
 }
 
 export function EquipmentSimulationEditor({
@@ -65,6 +92,7 @@ export function EquipmentSimulationEditor({
   capstoneDeltas = [],
   globalIndependentMultiplierFactor = 1,
   customPanelStats = [],
+  affixVisibility,
   customContext,
   getAffixContribution,
   getItemIndependentContribution,
@@ -187,6 +215,7 @@ export function EquipmentSimulationEditor({
             setIsEditingRaw(false);
           }}
           customPanelStats={customPanelStats}
+          affixVisibility={affixVisibility}
         />
       )}
     </section>
@@ -469,6 +498,7 @@ function ItemIndependentMultiplierTable({
       <div className="itemMultiplierRow itemMultiplierHeader">
         <span>{t.equipment.enabled}</span>
         <span>{t.equipment.name}</span>
+        <span>{t.settings.independentMultiplierTarget}</span>
         <span>{t.equipment.increase}</span>
         <span>{t.equipment.multiplier}</span>
         <span title={contributionHelp}>
@@ -496,6 +526,22 @@ function ItemIndependentMultiplierTable({
               placeholder={t.equipment.itemIndependentMultipliers}
               onChange={(event) => updateRow({ ...row, name: event.target.value })}
             />
+            <select
+              value={row.target ?? "all"}
+              title={t.settings.independentMultiplierTarget}
+              onChange={(event) =>
+                updateRow({
+                  ...row,
+                  target: event.target.value as IndependentMultiplierTarget,
+                })
+              }
+            >
+              {independentMultiplierTargets.map((target) => (
+                <option value={target} key={target}>
+                  {getIndependentMultiplierTargetLabel(t, target)}
+                </option>
+              ))}
+            </select>
             <input
               type="number"
               value={row.valuePercent}
@@ -805,7 +851,7 @@ function calculateCapstoneGainRows({
   baseInputs: BaseInputs;
   capstoneBonus: number;
   deltas: DeltaRow[];
-  globalIndependentMultiplierFactor: number;
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors;
   customContext?: CustomCalculationContext;
 }): CapstoneGainRow[] {
   const meaningfulAffixes = item.affixes.filter((affix) => affix.value !== 0);
@@ -919,15 +965,16 @@ function RawItemEditModal({
   onCancel,
   onSave,
   customPanelStats,
+  affixVisibility,
 }: {
   t: Translation;
   item: EquipmentItem;
   onCancel: () => void;
   onSave: (item: EquipmentItem) => void;
   customPanelStats: CustomPanelStat[];
+  affixVisibility?: AffixVisibilityMap;
 }) {
   const [draft, setDraft] = useState<EquipmentItem>(item);
-  const affixOptions = buildAffixOptions(t, customPanelStats);
 
   const updateAffix = (affix: Affix) => {
     setDraft({
@@ -983,6 +1030,22 @@ function RawItemEditModal({
         (row) => row.id !== rowId,
       ),
     });
+  };
+  const createVisibleAffix = (): Affix => {
+    const firstOption = buildAffixOptions(
+      t,
+      customPanelStats,
+      affixVisibility,
+    )[0];
+
+    if (!firstOption) {
+      return createEmptyAffix();
+    }
+
+    return {
+      ...createEmptyAffix(firstOption.type),
+      customStatId: firstOption.customStatId,
+    };
   };
 
   return (
@@ -1066,7 +1129,12 @@ function RawItemEditModal({
                   });
                 }}
               >
-                {affixOptions.map((option) => (
+                {buildAffixOptions(
+                  t,
+                  customPanelStats,
+                  affixVisibility,
+                  encodeAffixOption(affix.type, affix.customStatId),
+                ).map((option) => (
                   <option value={option.value} key={option.value}>
                     {option.label}
                   </option>
@@ -1121,7 +1189,12 @@ function RawItemEditModal({
                   });
                 }}
               >
-                {affixOptions.map((option) => (
+                {buildAffixOptions(
+                  t,
+                  customPanelStats,
+                  affixVisibility,
+                  encodeAffixOption(affix.type, affix.customStatId),
+                ).map((option) => (
                   <option value={option.value} key={option.value}>
                     {option.label}
                   </option>
@@ -1161,6 +1234,7 @@ function RawItemEditModal({
           <div className="rawAffixRow itemMultiplierRawRow rawAffixHeader">
             <span>{t.equipment.enabled}</span>
             <span>{t.equipment.name}</span>
+            <span>{t.settings.independentMultiplierTarget}</span>
             <span>{t.equipment.increase}</span>
             <span />
           </div>
@@ -1189,6 +1263,22 @@ function RawItemEditModal({
                   })
                 }
               />
+              <select
+                value={row.target ?? "all"}
+                title={t.settings.independentMultiplierTarget}
+                onChange={(event) =>
+                  updateItemIndependentMultiplier({
+                    ...row,
+                    target: event.target.value as IndependentMultiplierTarget,
+                  })
+                }
+              >
+                {independentMultiplierTargets.map((target) => (
+                  <option value={target} key={target}>
+                    {getIndependentMultiplierTargetLabel(t, target)}
+                  </option>
+                ))}
+              </select>
               <input
                 type="number"
                 value={row.valuePercent}
@@ -1217,7 +1307,7 @@ function RawItemEditModal({
             type="button"
             className="secondaryButton"
             onClick={() =>
-              setDraft({ ...draft, affixes: [...draft.affixes, createEmptyAffix()] })
+              setDraft({ ...draft, affixes: [...draft.affixes, createVisibleAffix()] })
             }
           >
             {t.equipment.addItemAffix}
@@ -1230,7 +1320,7 @@ function RawItemEditModal({
                 ...draft,
                 extraAffixes: [
                   ...(draft.extraAffixes ?? []),
-                  createEmptyAffix(),
+                  createVisibleAffix(),
                 ],
               })
             }

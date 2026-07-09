@@ -9,12 +9,26 @@ export type BuiltInAffixType =
   | "additiveDamage"
   | "critDamageAdditive"
   | "vulnerableDamageAdditive"
+  | "dotDamageAdditive"
+  | "dotDamageMultiplier"
   | "skillRanks"
   | "weaponDamage";
 
 export type AffixType = BuiltInAffixType | "customStat";
+export type PrimaryDamageType = "direct" | "dot";
+export type IndependentMultiplierTarget = "all" | "crit" | "vulnerable" | "dot";
+export type AffixVisibilityMap = Record<string, boolean>;
+export type AffixVisibilityPreset = "all" | "direct" | "dot";
+export type AffixCategory =
+  | "basic"
+  | "direct"
+  | "vulnerable"
+  | "dot"
+  | "general"
+  | "custom";
 
 export interface BaseInputs {
+  primaryDamageType: PrimaryDamageType;
   baseCritChance: number;
   vulnerableUptime: number;
   baseMainStat: number;
@@ -24,6 +38,7 @@ export interface BaseInputs {
   baseVulnerableDamageMultiplier: number;
   baseCritDamageAdditive: number;
   baseVulnerableDamageAdditive: number;
+  baseDotMultiplier: number;
   baseWeaponDamageMin: number;
   baseWeaponDamageMax: number;
   includeWeaponDamage: boolean;
@@ -66,6 +81,7 @@ export interface GlobalIndependentMultiplier {
   enabled: boolean;
   name: string;
   valuePercent: number;
+  target: IndependentMultiplierTarget;
 }
 
 export interface ItemIndependentMultiplier {
@@ -73,6 +89,7 @@ export interface ItemIndependentMultiplier {
   enabled: boolean;
   name: string;
   valuePercent: number;
+  target: IndependentMultiplierTarget;
 }
 
 export interface GearTotals {
@@ -84,6 +101,8 @@ export interface GearTotals {
   gearAdditiveDamage: number;
   gearCritDamageAdditive: number;
   gearVulnerableDamageAdditive: number;
+  gearDotDamageAdditive: number;
+  gearDotDamageMultiplier: number;
   gearSkillRanks: number;
   gearWeaponDamage: number;
 }
@@ -110,6 +129,7 @@ export interface CustomDamageRule {
   sourceCustomStatId: string;
   percentPerPoint: number;
   output: CustomDamageRuleOutput;
+  independentMultiplierTarget?: IndependentMultiplierTarget;
 }
 
 export interface CustomPanelStatBreakdown {
@@ -133,6 +153,14 @@ export interface CustomDamageRuleBreakdown {
   rulePercent: number;
   output: CustomDamageRuleOutput;
   effectFactor: number;
+  independentMultiplierTarget?: IndependentMultiplierTarget;
+}
+
+export interface IndependentMultiplierFactors {
+  all: number;
+  crit: number;
+  vulnerable: number;
+  dot: number;
 }
 
 export interface CustomRuleOutputs {
@@ -140,6 +168,7 @@ export interface CustomRuleOutputs {
   critDamageAdditive: number;
   vulnerableDamageAdditive: number;
   independentMultiplierFactor: number;
+  independentMultiplierFactors: IndependentMultiplierFactors;
   rules: CustomDamageRuleBreakdown[];
 }
 
@@ -151,26 +180,35 @@ export interface CustomCalculationContext {
 }
 
 export interface StateBreakdown {
+  mode?: PrimaryDamageType;
   crit: boolean;
   vulnerable: boolean;
   probability: number;
   additiveFactor: number;
   critMultiplier: number;
   vulnerableMultiplier: number;
+  dotMultiplier?: number;
+  independentMultiplier: number;
   contribution: number;
 }
 
 export interface DamageBreakdown {
+  primaryDamageType: PrimaryDamageType;
   mainStatFactor: number;
   critFactor: number;
   vulnerableFactor: number;
   typeAllMultiplierFactor: number;
   additiveFactor: number;
+  dotTypeFactor: number;
   weaponDamageFactor: number;
   skillDamageFactor: number;
   globalIndependentMultiplierFactor: number;
   equipmentIndependentMultiplierFactor: number;
   customIndependentMultiplierFactor: number;
+  globalIndependentMultiplierFactors: IndependentMultiplierFactors;
+  equipmentIndependentMultiplierFactors: IndependentMultiplierFactors;
+  customIndependentMultiplierFactors: IndependentMultiplierFactors;
+  combinedIndependentMultiplierFactors: IndependentMultiplierFactors;
   expectedCombatFactor: number;
   totalDamageFactor: number;
   damageBase: number;
@@ -188,6 +226,8 @@ export interface DamageBreakdown {
   totalVulnerableDamageMultiplier: number;
   totalCritDamageAdditive: number;
   totalVulnerableDamageAdditive: number;
+  totalDotDamageAdditive: number;
+  totalDotDamageMultiplier: number;
   totalGenericAdditive: number;
   customGenericAdditive: number;
   customCritDamageAdditive: number;
@@ -214,6 +254,8 @@ export interface TypicalRolls {
   additiveDamage: number;
   critDamageAdditive: number;
   vulnerableDamageAdditive: number;
+  dotDamageAdditive: number;
+  dotDamageMultiplier: number;
   skillRanks: number;
   weaponDamage: number;
 }
@@ -224,6 +266,7 @@ export interface AppState {
   equipment: EquipmentItem[];
   quickDeltas: DeltaRow[];
   typicalRolls: TypicalRolls;
+  affixVisibility: AffixVisibilityMap;
   customStatReferenceValues: Record<string, number>;
   customPanelStats: CustomPanelStat[];
   customDamageRules: CustomDamageRule[];
@@ -258,6 +301,7 @@ export interface ComparisonBreakdown {
     vulnerableFactor: FactorChange;
     typeAllMultiplierFactor: FactorChange;
     additiveFactor: FactorChange;
+    dotTypeFactor: FactorChange;
     weaponDamageFactor: FactorChange;
     skillDamageFactor: FactorChange;
     globalIndependentMultiplierFactor: FactorChange;
@@ -291,7 +335,7 @@ export interface CandidateContributionParams {
   candidate: EquipmentItem;
   rowId: string;
   rowKind: CandidateContributionRowKind;
-  globalIndependentMultiplierFactor?: number;
+  globalIndependentMultiplierFactor?: number | IndependentMultiplierFactors;
   deltas?: DeltaRow[];
   customContext?: CustomCalculationContext;
 }
@@ -312,6 +356,8 @@ export const AFFIX_TYPES: BuiltInAffixType[] = [
   "additiveDamage",
   "critDamageAdditive",
   "vulnerableDamageAdditive",
+  "dotDamageAdditive",
+  "dotDamageMultiplier",
   "skillRanks",
   "weaponDamage",
 ];
@@ -324,11 +370,43 @@ export const PERCENT_AFFIX_TYPES: BuiltInAffixType[] = [
   "additiveDamage",
   "critDamageAdditive",
   "vulnerableDamageAdditive",
+  "dotDamageAdditive",
+  "dotDamageMultiplier",
 ];
 
 export const INTEGER_AFFIX_TYPES: BuiltInAffixType[] = ["skillRanks"];
 
+export const DEFAULT_AFFIX_VISIBILITY: AffixVisibilityMap =
+  Object.fromEntries(AFFIX_TYPES.map((type) => [type, true]));
+
+export const AFFIX_CATEGORY_BY_TYPE: Record<BuiltInAffixType, AffixCategory> = {
+  mainStat: "basic",
+  weaponDamage: "basic",
+  skillRanks: "basic",
+  critChance: "direct",
+  critDamageAdditive: "direct",
+  critDamageMultiplier: "direct",
+  vulnerableDamageAdditive: "vulnerable",
+  vulnerableDamageMultiplier: "vulnerable",
+  dotDamageAdditive: "dot",
+  dotDamageMultiplier: "dot",
+  additiveDamage: "general",
+  typeAllDamageMultiplier: "general",
+};
+
+const DIRECT_COMMON_HIDDEN_AFFIXES = new Set<BuiltInAffixType>([
+  "dotDamageAdditive",
+  "dotDamageMultiplier",
+]);
+
+const DOT_COMMON_HIDDEN_AFFIXES = new Set<BuiltInAffixType>([
+  "critChance",
+  "critDamageAdditive",
+  "critDamageMultiplier",
+]);
+
 export const DEFAULT_BASE_INPUTS: BaseInputs = {
+  primaryDamageType: "direct",
   baseCritChance: 0.7,
   vulnerableUptime: 0.6,
   baseMainStat: 2500,
@@ -338,6 +416,7 @@ export const DEFAULT_BASE_INPUTS: BaseInputs = {
   baseVulnerableDamageMultiplier: 0,
   baseCritDamageAdditive: 0,
   baseVulnerableDamageAdditive: 0,
+  baseDotMultiplier: 1,
   baseWeaponDamageMin: 0,
   baseWeaponDamageMax: 0,
   includeWeaponDamage: true,
@@ -363,6 +442,8 @@ export const EMPTY_GEAR_TOTALS: GearTotals = {
   gearAdditiveDamage: 0,
   gearCritDamageAdditive: 0,
   gearVulnerableDamageAdditive: 0,
+  gearDotDamageAdditive: 0,
+  gearDotDamageMultiplier: 0,
   gearSkillRanks: 0,
   gearWeaponDamage: 0,
 };
@@ -376,6 +457,8 @@ export const DEFAULT_TYPICAL_ROLLS: TypicalRolls = {
   additiveDamage: 0.75,
   critDamageAdditive: 0.75,
   vulnerableDamageAdditive: 0.6,
+  dotDamageAdditive: 0.75,
+  dotDamageMultiplier: 0.25,
   skillRanks: 4,
   weaponDamage: 286,
 };
@@ -429,6 +512,7 @@ export function createCustomDamageRule(
     sourceCustomStatId,
     percentPerPoint: 0,
     output: "independentMultiplier",
+    independentMultiplierTarget: "all",
   };
 }
 
@@ -438,6 +522,7 @@ export function createGlobalIndependentMultiplier(): GlobalIndependentMultiplier
     enabled: true,
     name: "",
     valuePercent: 0,
+    target: "all",
   };
 }
 
@@ -470,7 +555,77 @@ export function createItemIndependentMultiplier(): ItemIndependentMultiplier {
     enabled: true,
     name: "",
     valuePercent: 0,
+    target: "all",
   };
+}
+
+export function getCustomStatVisibilityKey(customStatId: string): string {
+  return `customStat:${customStatId}`;
+}
+
+export function normalizeAffixVisibility(
+  value: unknown,
+  customPanelStats: CustomPanelStat[] = [],
+): AffixVisibilityMap {
+  const source = isPlainRecord(value) ? value : {};
+  const normalized: AffixVisibilityMap = { ...DEFAULT_AFFIX_VISIBILITY };
+
+  AFFIX_TYPES.forEach((type) => {
+    normalized[type] = source[type] === false ? false : true;
+  });
+
+  customPanelStats.forEach((stat) => {
+    const key = getCustomStatVisibilityKey(stat.id);
+    normalized[key] = source[key] === false ? false : true;
+  });
+
+  return normalized;
+}
+
+export function isAffixVisible(
+  affixVisibility: AffixVisibilityMap | undefined,
+  type: AffixType,
+  customStatId?: string,
+): boolean {
+  const key =
+    type === "customStat" && customStatId
+      ? getCustomStatVisibilityKey(customStatId)
+      : type;
+
+  return affixVisibility?.[key] !== false;
+}
+
+export function applyAffixVisibilityPreset(
+  preset: AffixVisibilityPreset,
+  customPanelStats: CustomPanelStat[] = [],
+): AffixVisibilityMap {
+  const next: AffixVisibilityMap = {};
+
+  AFFIX_TYPES.forEach((type) => {
+    if (preset === "all") {
+      next[type] = true;
+      return;
+    }
+
+    if (preset === "direct") {
+      next[type] = !DIRECT_COMMON_HIDDEN_AFFIXES.has(type);
+      return;
+    }
+
+    next[type] = !DOT_COMMON_HIDDEN_AFFIXES.has(type);
+  });
+
+  customPanelStats
+    .filter((stat) => stat.enabled !== false)
+    .forEach((stat) => {
+      next[getCustomStatVisibilityKey(stat.id)] = true;
+    });
+
+  return next;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function normalizeAffixValueToTarget({
@@ -680,6 +835,9 @@ export function calculateCustomRuleOutputs(
       const sourceValue = sanitizeNumber(sourceStat.finalValue, 0);
       const rulePercent = sourceValue * percentPerPoint;
       const effectFactor = sanitizeMultiplierFactor(1 + rulePercent / 100);
+      const independentMultiplierTarget = normalizeIndependentMultiplierTarget(
+        rule.independentMultiplierTarget,
+      );
       const breakdown: CustomDamageRuleBreakdown = {
         id: rule.id,
         enabled: true,
@@ -690,6 +848,7 @@ export function calculateCustomRuleOutputs(
         rulePercent,
         output: rule.output,
         effectFactor,
+        independentMultiplierTarget,
       };
 
       outputs.rules.push(breakdown);
@@ -706,6 +865,8 @@ export function calculateCustomRuleOutputs(
           break;
         case "independentMultiplier":
           outputs.independentMultiplierFactor *= effectFactor;
+          outputs.independentMultiplierFactors[independentMultiplierTarget] *=
+            effectFactor;
           break;
       }
 
@@ -843,7 +1004,7 @@ export function calculateEquipmentSetupBreakdown({
 }: {
   baseInputs: BaseInputs;
   equipment: EquipmentItem[];
-  globalIndependentMultiplierFactor?: number;
+  globalIndependentMultiplierFactor?: number | IndependentMultiplierFactors;
   deltas?: DeltaRow[];
   customContext?: CustomCalculationContext;
 }): DamageBreakdown {
@@ -867,7 +1028,7 @@ export function calculateEquipmentSetupBreakdown({
     baseInputs,
     applyDeltasToGearTotals(aggregateGear(equipment, baseInputs), deltas),
     globalIndependentMultiplierFactor,
-    calculateEquipmentIndependentMultiplierFactor(equipment),
+    calculateEquipmentIndependentMultiplierFactors(equipment),
     {
       ...customContext,
       customAffixTotals,
@@ -928,7 +1089,7 @@ export function calculateCandidateCapstoneRecommendations({
   equipment: EquipmentItem[];
   replacedItemId: string;
   candidate: EquipmentItem;
-  globalIndependentMultiplierFactor?: number;
+  globalIndependentMultiplierFactor?: number | IndependentMultiplierFactors;
   deltas?: DeltaRow[];
   customContext?: CustomCalculationContext;
 }): CandidateCapstoneRecommendation[] {
@@ -1066,6 +1227,12 @@ export function addAffixToGearTotals(
     case "vulnerableDamageAdditive":
       totals.gearVulnerableDamageAdditive += value;
       break;
+    case "dotDamageAdditive":
+      totals.gearDotDamageAdditive += value;
+      break;
+    case "dotDamageMultiplier":
+      totals.gearDotDamageMultiplier += value;
+      break;
     case "skillRanks":
       totals.gearSkillRanks += coerceSkillRankDelta(value);
       break;
@@ -1080,8 +1247,8 @@ export function addAffixToGearTotals(
 export function calculateDamageBreakdown(
   baseInputs: BaseInputs,
   gearTotals: GearTotals,
-  globalIndependentMultiplierFactor = 1,
-  equipmentIndependentMultiplierFactor = 1,
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
+  equipmentIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
   customContext: CustomCalculationContext = {},
 ): DamageBreakdown {
   const customPanelStats = calculateCustomPanelStatBreakdowns(
@@ -1091,6 +1258,9 @@ export function calculateDamageBreakdown(
   const customRuleOutputs = calculateCustomRuleOutputs(
     customContext.customDamageRules,
     customPanelStats,
+  );
+  const primaryDamageType = normalizePrimaryDamageType(
+    baseInputs.primaryDamageType,
   );
   const totalCritChance = clamp(
     baseInputs.baseCritChance + gearTotals.gearCritChance,
@@ -1117,6 +1287,12 @@ export function calculateDamageBreakdown(
     baseInputs.baseVulnerableDamageAdditive +
     gearTotals.gearVulnerableDamageAdditive +
     customRuleOutputs.vulnerableDamageAdditive;
+  const totalDotDamageAdditive = gearTotals.gearDotDamageAdditive;
+  const totalDotDamageMultiplier = gearTotals.gearDotDamageMultiplier;
+  const baseDotMultiplier = sanitizePositiveNumber(
+    baseInputs.baseDotMultiplier,
+    1,
+  );
   const baseAverageWeaponDamage = getBaseAverageWeaponDamage(baseInputs);
   const effectiveWeaponDamage =
     baseAverageWeaponDamage + gearTotals.gearWeaponDamage;
@@ -1157,49 +1333,74 @@ export function calculateDamageBreakdown(
       (1 + totalVulnerableDamageMultiplier);
   const typeAllMultiplierFactor = 1 + gearTotals.gearTypeAllDamageMultiplier;
   const additiveFactor = 1 + totalGenericAdditive;
-  const stateBreakdown = calculateStateBreakdown({
-    critChance: totalCritChance,
-    vulnerableUptime,
-    totalGenericAdditive,
-    totalCritDamageAdditive,
-    totalVulnerableDamageAdditive,
-    baseCritMultiplier: baseInputs.baseCritMultiplier,
-    baseVulnerableMultiplier: baseInputs.baseVulnerableMultiplier,
-    totalCritDamageMultiplier,
-    totalVulnerableDamageMultiplier,
-  });
+  const dotTypeFactor = baseDotMultiplier * (1 + totalDotDamageMultiplier);
+  const safeGlobalIndependentMultiplierFactors =
+    coerceIndependentMultiplierFactors(globalIndependentMultiplierFactor);
+  const safeEquipmentIndependentMultiplierFactors =
+    coerceIndependentMultiplierFactors(equipmentIndependentMultiplierFactor);
+  const safeCustomIndependentMultiplierFactors =
+    sanitizeIndependentMultiplierFactors(
+      customRuleOutputs.independentMultiplierFactors,
+    );
+  const combinedIndependentMultiplierFactors =
+    multiplyIndependentMultiplierFactors(
+      safeGlobalIndependentMultiplierFactors,
+      safeEquipmentIndependentMultiplierFactors,
+      safeCustomIndependentMultiplierFactors,
+    );
+  const stateBreakdown =
+    primaryDamageType === "dot"
+      ? calculateDotStateBreakdown({
+          vulnerableUptime,
+          totalGenericAdditive,
+          totalDotDamageAdditive,
+          totalVulnerableDamageAdditive,
+          baseVulnerableMultiplier: baseInputs.baseVulnerableMultiplier,
+          totalVulnerableDamageMultiplier,
+          dotTypeFactor,
+          independentMultiplierFactors: combinedIndependentMultiplierFactors,
+        })
+      : calculateStateBreakdown({
+          critChance: totalCritChance,
+          vulnerableUptime,
+          totalGenericAdditive,
+          totalCritDamageAdditive,
+          totalVulnerableDamageAdditive,
+          baseCritMultiplier: baseInputs.baseCritMultiplier,
+          baseVulnerableMultiplier: baseInputs.baseVulnerableMultiplier,
+          totalCritDamageMultiplier,
+          totalVulnerableDamageMultiplier,
+          independentMultiplierFactors: combinedIndependentMultiplierFactors,
+        });
   const expectedCombatFactor = stateBreakdown.reduce(
     (sum, state) => sum + state.contribution,
     0,
-  );
-  const safeGlobalIndependentMultiplierFactor =
-    sanitizeMultiplierFactor(globalIndependentMultiplierFactor);
-  const safeEquipmentIndependentMultiplierFactor =
-    sanitizeMultiplierFactor(equipmentIndependentMultiplierFactor);
-  const safeCustomIndependentMultiplierFactor = sanitizeMultiplierFactor(
-    customRuleOutputs.independentMultiplierFactor,
   );
   const totalDamageFactor =
     damageBase *
     skillDamageFactor *
     mainStatFactor *
     typeAllMultiplierFactor *
-    expectedCombatFactor *
-    safeGlobalIndependentMultiplierFactor *
-    safeEquipmentIndependentMultiplierFactor *
-    safeCustomIndependentMultiplierFactor;
+    expectedCombatFactor;
 
   return {
+    primaryDamageType,
     mainStatFactor,
     critFactor,
     vulnerableFactor,
     typeAllMultiplierFactor,
     additiveFactor,
+    dotTypeFactor,
     weaponDamageFactor,
     skillDamageFactor,
-    globalIndependentMultiplierFactor: safeGlobalIndependentMultiplierFactor,
-    equipmentIndependentMultiplierFactor: safeEquipmentIndependentMultiplierFactor,
-    customIndependentMultiplierFactor: safeCustomIndependentMultiplierFactor,
+    globalIndependentMultiplierFactor: safeGlobalIndependentMultiplierFactors.all,
+    equipmentIndependentMultiplierFactor:
+      safeEquipmentIndependentMultiplierFactors.all,
+    customIndependentMultiplierFactor: safeCustomIndependentMultiplierFactors.all,
+    globalIndependentMultiplierFactors: safeGlobalIndependentMultiplierFactors,
+    equipmentIndependentMultiplierFactors: safeEquipmentIndependentMultiplierFactors,
+    customIndependentMultiplierFactors: safeCustomIndependentMultiplierFactors,
+    combinedIndependentMultiplierFactors,
     expectedCombatFactor,
     totalDamageFactor,
     damageBase,
@@ -1217,6 +1418,8 @@ export function calculateDamageBreakdown(
     totalVulnerableDamageMultiplier,
     totalCritDamageAdditive,
     totalVulnerableDamageAdditive,
+    totalDotDamageAdditive,
+    totalDotDamageMultiplier,
     totalGenericAdditive,
     customGenericAdditive: customRuleOutputs.genericAdditive,
     customCritDamageAdditive: customRuleOutputs.critDamageAdditive,
@@ -1231,7 +1434,7 @@ export function calculateDamageBreakdown(
 export function calculateEquipmentBreakdown(
   baseInputs: BaseInputs,
   equipment: EquipmentItem[],
-  globalIndependentMultiplierFactor = 1,
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
   customContext: CustomCalculationContext = {},
 ): DamageBreakdown {
   const customPanelStats = customContext.customPanelStats ?? [];
@@ -1240,7 +1443,7 @@ export function calculateEquipmentBreakdown(
     baseInputs,
     aggregateGear(equipment, baseInputs),
     globalIndependentMultiplierFactor,
-    calculateEquipmentIndependentMultiplierFactor(equipment),
+    calculateEquipmentIndependentMultiplierFactors(equipment),
     {
       ...customContext,
       customAffixTotals: aggregateCustomAffixTotals(
@@ -1283,6 +1486,7 @@ export function compareBreakdowns(
         after.typeAllMultiplierFactor,
       ),
       additiveFactor: makeFactorChange(before.additiveFactor, after.additiveFactor),
+      dotTypeFactor: makeFactorChange(before.dotTypeFactor, after.dotTypeFactor),
       weaponDamageFactor: makeFactorChange(
         before.weaponDamageFactor,
         after.weaponDamageFactor,
@@ -1319,8 +1523,8 @@ export function compareWithDeltas(
   baseInputs: BaseInputs,
   gearTotals: GearTotals,
   deltas: DeltaRow[],
-  globalIndependentMultiplierFactor = 1,
-  equipmentIndependentMultiplierFactor = 1,
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
+  equipmentIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
   customContext: CustomCalculationContext = {},
 ): ComparisonBreakdown {
   const customPanelStats = customContext.customPanelStats ?? [];
@@ -1359,7 +1563,7 @@ export function compareWithReplacement(
   equipment: EquipmentItem[],
   replacedItemId: string,
   candidate: EquipmentItem,
-  globalIndependentMultiplierFactor = 1,
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
   customContext: CustomCalculationContext = {},
 ): ComparisonBreakdown {
   const before = calculateEquipmentBreakdown(
@@ -1385,8 +1589,8 @@ export function calculateMarginalGains(
   baseInputs: BaseInputs,
   gearTotals: GearTotals,
   deltasByType: TypicalRolls,
-  globalIndependentMultiplierFactor = 1,
-  equipmentIndependentMultiplierFactor = 1,
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
+  equipmentIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
   customContext: CustomCalculationContext = {},
 ): MarginalGain[] {
   const customPanelStats = customContext.customPanelStats ?? [];
@@ -1468,8 +1672,8 @@ export function calculateMarginalGains(
 export function calculateUnitMarginalGains(
   baseInputs: BaseInputs,
   gearTotals: GearTotals,
-  globalIndependentMultiplierFactor = 1,
-  equipmentIndependentMultiplierFactor = 1,
+  globalIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
+  equipmentIndependentMultiplierFactor: number | IndependentMultiplierFactors = 1,
   customContext: CustomCalculationContext = {},
 ): MarginalGain[] {
   return calculateMarginalGains(
@@ -1484,6 +1688,8 @@ export function calculateUnitMarginalGains(
       additiveDamage: 1,
       critDamageAdditive: 0.01,
       vulnerableDamageAdditive: 0.01,
+      dotDamageAdditive: 0.01,
+      dotDamageMultiplier: 0.01,
       skillRanks: 1,
       weaponDamage: 100,
     },
@@ -1502,17 +1708,29 @@ export function calculateGlobalIndependentMultiplierFactor(
   rows: GlobalIndependentMultiplier[],
   includeGlobalIndependentMultipliers: boolean,
 ): number {
+  return calculateGlobalIndependentMultiplierFactors(
+    rows,
+    includeGlobalIndependentMultipliers,
+  ).all;
+}
+
+export function calculateGlobalIndependentMultiplierFactors(
+  rows: GlobalIndependentMultiplier[],
+  includeGlobalIndependentMultipliers: boolean,
+): IndependentMultiplierFactors {
   if (!includeGlobalIndependentMultipliers) {
-    return 1;
+    return createNeutralIndependentMultiplierFactors();
   }
 
-  return rows.reduce((product, row) => {
+  return rows.reduce((factors, row) => {
     if (!row.enabled) {
-      return product;
+      return factors;
     }
 
-    return product * globalIndependentMultiplierRowFactor(row.valuePercent);
-  }, 1);
+    const target = normalizeIndependentMultiplierTarget(row.target);
+    factors[target] *= globalIndependentMultiplierRowFactor(row.valuePercent);
+    return factors;
+  }, createNeutralIndependentMultiplierFactors());
 }
 
 export function globalIndependentMultiplierRowFactor(
@@ -1536,25 +1754,42 @@ export function sanitizeGlobalIndependentMultiplierValue(
 export function calculateEquipmentIndependentMultiplierFactor(
   equipment: EquipmentItem[],
 ): number {
-  return equipment.reduce((product, item) => {
+  return calculateEquipmentIndependentMultiplierFactors(equipment).all;
+}
+
+export function calculateEquipmentIndependentMultiplierFactors(
+  equipment: EquipmentItem[],
+): IndependentMultiplierFactors {
+  return equipment.reduce((factors, item) => {
     if (!item.enabled) {
-      return product;
+      return factors;
     }
 
-    return product * calculateItemIndependentMultiplierFactor(item);
-  }, 1);
+    return multiplyIndependentMultiplierFactors(
+      factors,
+      calculateItemIndependentMultiplierFactors(item),
+    );
+  }, createNeutralIndependentMultiplierFactors());
 }
 
 export function calculateItemIndependentMultiplierFactor(
   item: EquipmentItem,
 ): number {
-  return (item.itemIndependentMultipliers ?? []).reduce((product, row) => {
+  return calculateItemIndependentMultiplierFactors(item).all;
+}
+
+export function calculateItemIndependentMultiplierFactors(
+  item: EquipmentItem,
+): IndependentMultiplierFactors {
+  return (item.itemIndependentMultipliers ?? []).reduce((factors, row) => {
     if (!row.enabled) {
-      return product;
+      return factors;
     }
 
-    return product * itemIndependentMultiplierRowFactor(row.valuePercent);
-  }, 1);
+    const target = normalizeIndependentMultiplierTarget(row.target);
+    factors[target] *= itemIndependentMultiplierRowFactor(row.valuePercent);
+    return factors;
+  }, createNeutralIndependentMultiplierFactors());
 }
 
 export function itemIndependentMultiplierRowFactor(
@@ -1573,6 +1808,20 @@ export function sanitizeItemIndependentMultiplierValue(
   }
 
   return Math.max(value, -99.99);
+}
+
+export function normalizePrimaryDamageType(
+  value: unknown,
+): PrimaryDamageType {
+  return value === "dot" ? "dot" : "direct";
+}
+
+export function normalizeIndependentMultiplierTarget(
+  value: unknown,
+): IndependentMultiplierTarget {
+  return value === "crit" || value === "vulnerable" || value === "dot"
+    ? value
+    : "all";
 }
 
 export function getCurrentBucketTotal(
@@ -1602,6 +1851,10 @@ export function getCurrentBucketTotal(
       return breakdown.totalCritDamageAdditive;
     case "vulnerableDamageAdditive":
       return breakdown.totalVulnerableDamageAdditive;
+    case "dotDamageAdditive":
+      return breakdown.totalDotDamageAdditive;
+    case "dotDamageMultiplier":
+      return breakdown.totalDotDamageMultiplier;
     case "skillRanks":
       return breakdown.totalMainSkillRank;
     case "weaponDamage":
@@ -1630,6 +1883,11 @@ export function getCurrentFactor(
     case "critDamageAdditive":
     case "vulnerableDamageAdditive":
       return breakdown.expectedCombatFactor;
+    case "dotDamageAdditive":
+    case "dotDamageMultiplier":
+      return breakdown.primaryDamageType === "dot"
+        ? breakdown.expectedCombatFactor
+        : breakdown.dotTypeFactor;
     case "skillRanks":
       return breakdown.skillDamageFactor;
     case "weaponDamage":
@@ -1684,6 +1942,66 @@ function sanitizeMultiplierFactor(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
+function sanitizeIndependentMultiplierFactors(
+  factors: IndependentMultiplierFactors,
+): IndependentMultiplierFactors {
+  return {
+    all: sanitizeMultiplierFactor(factors.all),
+    crit: sanitizeMultiplierFactor(factors.crit),
+    vulnerable: sanitizeMultiplierFactor(factors.vulnerable),
+    dot: sanitizeMultiplierFactor(factors.dot),
+  };
+}
+
+function createNeutralIndependentMultiplierFactors(): IndependentMultiplierFactors {
+  return {
+    all: 1,
+    crit: 1,
+    vulnerable: 1,
+    dot: 1,
+  };
+}
+
+function coerceIndependentMultiplierFactors(
+  value: number | IndependentMultiplierFactors,
+): IndependentMultiplierFactors {
+  if (typeof value === "number") {
+    return {
+      ...createNeutralIndependentMultiplierFactors(),
+      all: sanitizeMultiplierFactor(value),
+    };
+  }
+
+  return sanitizeIndependentMultiplierFactors({
+    ...createNeutralIndependentMultiplierFactors(),
+    ...value,
+  });
+}
+
+function multiplyIndependentMultiplierFactors(
+  ...factorGroups: IndependentMultiplierFactors[]
+): IndependentMultiplierFactors {
+  return sanitizeIndependentMultiplierFactors(
+    factorGroups.reduce(
+      (product, factors) => ({
+        all: product.all * factors.all,
+        crit: product.crit * factors.crit,
+        vulnerable: product.vulnerable * factors.vulnerable,
+        dot: product.dot * factors.dot,
+      }),
+      createNeutralIndependentMultiplierFactors(),
+    ),
+  );
+}
+
+function sanitizePositiveNumber(value: number, fallback: number): number {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? numberValue
+    : fallback;
+}
+
 function sanitizeNumber(value: number | undefined, fallback: number): number {
   const numberValue = Number(value);
 
@@ -1705,6 +2023,7 @@ function createEmptyCustomRuleOutputs(): CustomRuleOutputs {
     critDamageAdditive: 0,
     vulnerableDamageAdditive: 0,
     independentMultiplierFactor: 1,
+    independentMultiplierFactors: createNeutralIndependentMultiplierFactors(),
     rules: [],
   };
 }
@@ -1727,6 +2046,61 @@ function coerceSkillRankDelta(value: number): number {
   return Math.round(Number.isFinite(value) ? value : 0);
 }
 
+function calculateDotStateBreakdown({
+  vulnerableUptime,
+  totalGenericAdditive,
+  totalDotDamageAdditive,
+  totalVulnerableDamageAdditive,
+  baseVulnerableMultiplier,
+  totalVulnerableDamageMultiplier,
+  dotTypeFactor,
+  independentMultiplierFactors,
+}: {
+  vulnerableUptime: number;
+  totalGenericAdditive: number;
+  totalDotDamageAdditive: number;
+  totalVulnerableDamageAdditive: number;
+  baseVulnerableMultiplier: number;
+  totalVulnerableDamageMultiplier: number;
+  dotTypeFactor: number;
+  independentMultiplierFactors: IndependentMultiplierFactors;
+}): StateBreakdown[] {
+  return [{ vulnerable: false }, { vulnerable: true }].map(({ vulnerable }) => {
+    const probability = vulnerable ? vulnerableUptime : 1 - vulnerableUptime;
+    const additiveFactor =
+      1 +
+      totalGenericAdditive +
+      totalDotDamageAdditive +
+      (vulnerable ? totalVulnerableDamageAdditive : 0);
+    const vulnerableMultiplier = vulnerable
+      ? baseVulnerableMultiplier * (1 + totalVulnerableDamageMultiplier)
+      : 1;
+    const independentMultiplier =
+      independentMultiplierFactors.all *
+      independentMultiplierFactors.dot *
+      (vulnerable ? independentMultiplierFactors.vulnerable : 1);
+    const contribution =
+      probability *
+      additiveFactor *
+      vulnerableMultiplier *
+      dotTypeFactor *
+      independentMultiplier;
+
+    return {
+      mode: "dot",
+      crit: false,
+      vulnerable,
+      probability,
+      additiveFactor,
+      critMultiplier: 1,
+      vulnerableMultiplier,
+      dotMultiplier: dotTypeFactor,
+      independentMultiplier,
+      contribution,
+    };
+  });
+}
+
 function calculateStateBreakdown({
   critChance,
   vulnerableUptime,
@@ -1737,6 +2111,7 @@ function calculateStateBreakdown({
   baseVulnerableMultiplier,
   totalCritDamageMultiplier,
   totalVulnerableDamageMultiplier,
+  independentMultiplierFactors,
 }: {
   critChance: number;
   vulnerableUptime: number;
@@ -1747,6 +2122,7 @@ function calculateStateBreakdown({
   baseVulnerableMultiplier: number;
   totalCritDamageMultiplier: number;
   totalVulnerableDamageMultiplier: number;
+  independentMultiplierFactors: IndependentMultiplierFactors;
 }): StateBreakdown[] {
   return [
     { crit: false, vulnerable: false },
@@ -1768,16 +2144,26 @@ function calculateStateBreakdown({
     const vulnerableMultiplier = vulnerable
       ? baseVulnerableMultiplier * (1 + totalVulnerableDamageMultiplier)
       : 1;
+    const independentMultiplier =
+      independentMultiplierFactors.all *
+      (crit ? independentMultiplierFactors.crit : 1) *
+      (vulnerable ? independentMultiplierFactors.vulnerable : 1);
     const contribution =
-      probability * additiveFactor * critMultiplier * vulnerableMultiplier;
+      probability *
+      additiveFactor *
+      critMultiplier *
+      vulnerableMultiplier *
+      independentMultiplier;
 
     return {
+      mode: "direct",
       crit,
       vulnerable,
       probability,
       additiveFactor,
       critMultiplier,
       vulnerableMultiplier,
+      independentMultiplier,
       contribution,
     };
   });

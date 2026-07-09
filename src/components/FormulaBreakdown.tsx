@@ -26,15 +26,35 @@ const factorKeys = [
   "totalDamageFactor",
 ] as const;
 
+const dotFactorKeys = [
+  "weaponDamageFactor",
+  "skillDamageFactor",
+  "globalIndependentMultiplierFactor",
+  "equipmentIndependentMultiplierFactor",
+  "mainStatFactor",
+  "vulnerableFactor",
+  "typeAllMultiplierFactor",
+  "dotTypeFactor",
+  "additiveFactor",
+  "expectedCombatFactor",
+  "totalDamageFactor",
+] as const;
+
 export function FormulaBreakdown({
   t,
   breakdown,
   comparison,
 }: FormulaBreakdownProps) {
   if (comparison) {
+    const keys =
+      comparison.before.primaryDamageType === "dot" ||
+      comparison.after.primaryDamageType === "dot"
+        ? dotFactorKeys
+        : factorKeys;
+
     return (
       <div className="formulaList">
-        {factorKeys.map((key) => (
+        {keys.map((key) => (
           <ComparisonRow
             key={key}
             label={t.formula[key]}
@@ -50,9 +70,11 @@ export function FormulaBreakdown({
     return null;
   }
 
+  const keys = breakdown.primaryDamageType === "dot" ? dotFactorKeys : factorKeys;
+
   return (
     <div className="formulaList">
-      {factorKeys.map((key) => (
+      {keys.map((key) => (
         <div className="formulaRow" key={key} title={t.formula.tooltips[key]}>
           <span>{t.formula[key]}</span>
           <strong>{formatNumber(breakdown[key])}</strong>

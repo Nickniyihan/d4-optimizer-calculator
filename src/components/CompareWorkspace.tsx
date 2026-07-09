@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Affix,
+  AffixVisibilityMap,
   AffixGroup,
   BaseInputs,
   ComparisonBreakdown,
@@ -9,6 +10,7 @@ import {
   DeltaRow,
   EquipmentItem,
   GearTotals,
+  IndependentMultiplierFactors,
   ItemIndependentMultiplier,
   buildCandidateReplacementEquipment,
   calculateCandidateRowContribution,
@@ -56,8 +58,9 @@ interface CompareWorkspaceProps {
   onSelectedItemIdChange: (itemId: string) => void;
   candidate: EquipmentItem;
   onCandidateChange: (item: EquipmentItem) => void;
-  globalIndependentMultiplierFactor: number;
+  globalIndependentMultiplierFactor: IndependentMultiplierFactors;
   customPanelStats: CustomPanelStat[];
+  affixVisibility: AffixVisibilityMap;
   customContext: CustomCalculationContext;
   comparison: ComparisonBreakdown | null;
 }
@@ -87,6 +90,7 @@ export function CompareWorkspace({
   onCandidateChange,
   globalIndependentMultiplierFactor,
   customPanelStats,
+  affixVisibility,
   customContext,
   comparison,
 }: CompareWorkspaceProps) {
@@ -209,6 +213,7 @@ export function CompareWorkspace({
           onChange={onQuickDeltasChange}
           comparison={comparison}
           customPanelStats={customPanelStats}
+          affixVisibility={affixVisibility}
         />
       )}
 
@@ -265,6 +270,7 @@ export function CompareWorkspace({
               capstoneDeltas={candidateContextDeltas}
               globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
               customPanelStats={customPanelStats}
+              affixVisibility={affixVisibility}
               customContext={customContext}
               getAffixContribution={getCandidateAffixContribution}
               getItemIndependentContribution={getCandidateItemMultiplierContribution}
@@ -347,15 +353,15 @@ function ManualChangesEditor({
   onChange,
   comparison,
   customPanelStats,
+  affixVisibility,
 }: {
   t: Translation;
   deltas: DeltaRow[];
   onChange: (deltas: DeltaRow[]) => void;
   comparison: ComparisonBreakdown | null;
   customPanelStats: CustomPanelStat[];
+  affixVisibility: AffixVisibilityMap;
 }) {
-  const affixOptions = buildAffixOptions(t, customPanelStats);
-
   return (
     <section className="panel flatPanel">
       <div className="panelHeader">
@@ -366,12 +372,25 @@ function ManualChangesEditor({
         <button
           type="button"
           className="secondaryButton"
-          onClick={() =>
+          onClick={() => {
+            const firstOption = buildAffixOptions(
+              t,
+              customPanelStats,
+              affixVisibility,
+            )[0];
+            const parsed = firstOption
+              ? parseAffixOption(firstOption.value)
+              : { type: "critChance" as const, customStatId: undefined };
             onChange([
               ...deltas,
-              { id: createId("delta"), type: "critChance", value: 0 },
-            ])
-          }
+              {
+                id: createId("delta"),
+                type: parsed.type,
+                customStatId: parsed.customStatId,
+                value: 0,
+              },
+            ]);
+          }}
         >
           {t.compare.addChange}
         </button>
@@ -397,7 +416,12 @@ function ManualChangesEditor({
                 );
               }}
             >
-              {affixOptions.map((option) => (
+              {buildAffixOptions(
+                t,
+                customPanelStats,
+                affixVisibility,
+                encodeAffixOption(delta.type, delta.customStatId),
+              ).map((option) => (
                 <option value={option.value} key={option.value}>
                   {option.label}
                 </option>

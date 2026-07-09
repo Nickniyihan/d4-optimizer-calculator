@@ -14,7 +14,9 @@ import {
   calculateDamageBreakdown,
   calculateEquipmentBreakdown,
   calculateEquipmentIndependentMultiplierFactor,
+  calculateEquipmentIndependentMultiplierFactors,
   calculateGlobalIndependentMultiplierFactor,
+  calculateGlobalIndependentMultiplierFactors,
   applyDeltasToGearTotals,
   compareBreakdowns,
   compareWithDeltas,
@@ -127,8 +129,23 @@ export default function App() {
       state.includeGlobalIndependentMultipliers,
     ],
   );
+  const globalIndependentMultiplierFactors = useMemo(
+    () =>
+      calculateGlobalIndependentMultiplierFactors(
+        state.globalIndependentMultipliers,
+        state.includeGlobalIndependentMultipliers,
+      ),
+    [
+      state.globalIndependentMultipliers,
+      state.includeGlobalIndependentMultipliers,
+    ],
+  );
   const equipmentIndependentMultiplierFactor = useMemo(
     () => calculateEquipmentIndependentMultiplierFactor(state.equipment),
+    [state.equipment],
+  );
+  const equipmentIndependentMultiplierFactors = useMemo(
+    () => calculateEquipmentIndependentMultiplierFactors(state.equipment),
     [state.equipment],
   );
   const customAffixTotals = useMemo(
@@ -159,10 +176,10 @@ export default function App() {
       calculateEquipmentBreakdown(
         state.baseInputs,
         state.equipment,
-        globalIndependentMultiplierFactor,
+        globalIndependentMultiplierFactors,
         customContext,
       ),
-    [customContext, globalIndependentMultiplierFactor, state.baseInputs, state.equipment],
+    [customContext, globalIndependentMultiplierFactors, state.baseInputs, state.equipment],
   );
   const activeComparison = useMemo(() => {
     if (compareSourceMode === "manualChangesOnly") {
@@ -170,8 +187,8 @@ export default function App() {
         state.baseInputs,
         gearTotals,
         state.quickDeltas,
-        globalIndependentMultiplierFactor,
-        equipmentIndependentMultiplierFactor,
+        globalIndependentMultiplierFactors,
+        equipmentIndependentMultiplierFactors,
         customContext,
       );
     }
@@ -187,7 +204,7 @@ export default function App() {
           state.equipment,
           selectedItem.id,
           candidate,
-          globalIndependentMultiplierFactor,
+          globalIndependentMultiplierFactors,
           customContext,
       );
     }
@@ -195,7 +212,7 @@ export default function App() {
     const before = calculateEquipmentBreakdown(
       state.baseInputs,
       state.equipment,
-      globalIndependentMultiplierFactor,
+      globalIndependentMultiplierFactors,
       customContext,
     );
     const replacementEquipment = state.equipment.map((item) =>
@@ -208,8 +225,8 @@ export default function App() {
     const after = calculateDamageBreakdown(
       state.baseInputs,
       afterGearTotals,
-      globalIndependentMultiplierFactor,
-      calculateEquipmentIndependentMultiplierFactor(replacementEquipment),
+      globalIndependentMultiplierFactors,
+      calculateEquipmentIndependentMultiplierFactors(replacementEquipment),
       {
         ...customContext,
         customAffixTotals: applyDeltasToCustomAffixTotals(
@@ -231,7 +248,9 @@ export default function App() {
     compareSourceMode,
     gearTotals,
     globalIndependentMultiplierFactor,
+    globalIndependentMultiplierFactors,
     equipmentIndependentMultiplierFactor,
+    equipmentIndependentMultiplierFactors,
     customContext,
     state.baseInputs,
     state.customPanelStats,
@@ -400,6 +419,7 @@ export default function App() {
                   t={t}
                   baseInputs={state.baseInputs}
                   typicalRolls={state.typicalRolls}
+                  affixVisibility={state.affixVisibility}
                   customStatReferenceValues={state.customStatReferenceValues}
                   customPanelStats={state.customPanelStats}
                   customDamageRules={state.customDamageRules}
@@ -437,6 +457,9 @@ export default function App() {
                   }
                   onTypicalRollsChange={(typicalRolls) =>
                     setState({ ...state, typicalRolls })
+                  }
+                  onAffixVisibilityChange={(affixVisibility) =>
+                    setState({ ...state, affixVisibility })
                   }
                   onCustomStatReferenceValuesChange={(
                     customStatReferenceValues,
@@ -483,6 +506,7 @@ export default function App() {
                 capstoneBonus={state.baseInputs.capstoneBonus}
                 defaultTargetQuality={state.baseInputs.defaultTargetQuality}
                 customPanelStats={state.customPanelStats}
+                affixVisibility={state.affixVisibility}
                 customContext={customContext}
                 listScrollTop={equipmentListScrollTop}
                 onListScrollTopChange={setEquipmentListScrollTop}
@@ -511,9 +535,10 @@ export default function App() {
                 candidate={candidate}
                 onCandidateChange={setCandidate}
                 globalIndependentMultiplierFactor={
-                  globalIndependentMultiplierFactor
+                  globalIndependentMultiplierFactors
                 }
                 customPanelStats={state.customPanelStats}
+                affixVisibility={state.affixVisibility}
                 customContext={customContext}
                 comparison={activeComparison}
               />
@@ -530,7 +555,7 @@ export default function App() {
           breakdown={breakdown}
           gearTotals={gearTotals}
           typicalRolls={state.typicalRolls}
-          globalIndependentMultiplierFactor={globalIndependentMultiplierFactor}
+          globalIndependentMultiplierFactor={globalIndependentMultiplierFactors}
           customPanelStats={state.customPanelStats}
           customContext={customContext}
           comparison={activeComparison}

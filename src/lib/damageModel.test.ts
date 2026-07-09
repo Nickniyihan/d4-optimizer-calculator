@@ -4,6 +4,7 @@ import {
   DEFAULT_TYPICAL_ROLLS,
   EMPTY_GEAR_TOTALS,
   GearTotals,
+  applyAffixVisibilityPreset,
   aggregateCustomAffixTotals,
   aggregateGear,
   applyDeltasToCustomAffixTotals,
@@ -17,13 +18,17 @@ import {
   calculateCustomRuleOutputs,
   calculateEquipmentBreakdown,
   calculateEquipmentIndependentMultiplierFactor,
+  calculateEquipmentIndependentMultiplierFactors,
   calculateGlobalIndependentMultiplierFactor,
+  calculateGlobalIndependentMultiplierFactors,
   calculateItemIndependentMultiplierContribution,
   calculateItemIndependentMultiplierFactor,
   compareWithDeltas,
   compareWithReplacement,
   createEquipmentItem,
   getSkillRankMultiplier,
+  isAffixVisible,
+  normalizeAffixVisibility,
   normalizeEquipmentAffix,
   normalizeAffixValueToTarget,
   replaceEquipmentItemWithCandidate,
@@ -295,6 +300,56 @@ describe("custom panel stats and damage rules", () => {
     ).toBeCloseTo(1.9);
   });
 
+  it("custom independent rule target controls where Ramaladni-style factor applies", () => {
+    const directBase = {
+      ...DEFAULT_BASE_INPUTS,
+      primaryDamageType: "direct" as const,
+      includeWeaponDamage: false,
+      includeSkillRankDamage: false,
+      includeSkillBaseMultiplier: false,
+    };
+    const dotBase = {
+      ...directBase,
+      primaryDamageType: "dot" as const,
+    };
+    const dotOnlyRule = {
+      ...ramaladniRule,
+      independentMultiplierTarget: "dot" as const,
+    };
+    const directWithoutCustom = calculateDamageBreakdown(
+      directBase,
+      EMPTY_GEAR_TOTALS,
+    );
+    const directWithDotTarget = calculateDamageBreakdown(
+      directBase,
+      EMPTY_GEAR_TOTALS,
+      1,
+      1,
+      {
+        customPanelStats: customStats,
+        customAffixTotals: { fury: 40 },
+        customDamageRules: [dotOnlyRule],
+      },
+    );
+    const dotWithoutCustom = calculateDamageBreakdown(dotBase, EMPTY_GEAR_TOTALS);
+    const dotWithDotTarget = calculateDamageBreakdown(
+      dotBase,
+      EMPTY_GEAR_TOTALS,
+      1,
+      1,
+      {
+        customPanelStats: customStats,
+        customAffixTotals: { fury: 40 },
+        customDamageRules: [dotOnlyRule],
+      },
+    );
+
+    expect(directWithDotTarget.totalDamageFactor).toBeCloseTo(
+      directWithoutCustom.totalDamageFactor,
+    );
+    expect(dotWithDotTarget.totalDamageFactor / dotWithoutCustom.totalDamageFactor).toBeCloseTo(1.9);
+  });
+
   it("candidate replacement recalculates custom stat rules", () => {
     const current = createEquipmentItem("Current", 0);
     current.affixes = [
@@ -466,10 +521,110 @@ describe("damage formula", () => {
       additiveDamage: 0.75,
       critDamageAdditive: 0.75,
       vulnerableDamageAdditive: 0.6,
+      dotDamageAdditive: 0.75,
+      dotDamageMultiplier: 0.25,
       skillRanks: 4,
       weaponDamage: 286,
     });
     expect(DEFAULT_BASE_INPUTS.includeSkillBaseMultiplier).toBe(false);
+  });
+
+  it("keeps Direct Damage behavior neutral to DoT-only inputs", () => {
+    const baseline = calculateDamageBreakdown(
+      DEFAULT_BASE_INPUTS,
+      EMPTY_GEAR_TOTALS,
+    );
+    const withDotOnlyInputs = calculateDamageBreakdown(
+      {
+        ...DEFAULT_BASE_INPUTS,
+        primaryDamageType: "direct",
+        baseDotMultiplier: 3,
+      },
+      {
+        ...EMPTY_GEAR_TOTALS,
+        gearDotDamageAdditive: 1,
+        gearDotDamageMultiplier: 2,
+      },
+    );
+
+    expect(withDotOnlyInputs.primaryDamageType).toBe("direct");
+    expect(withDotOnlyInputs.totalDamageFactor).toBeCloseTo(
+      baseline.totalDamageFactor,
+    );
+    expect(withDotOnlyInputs.expectedCombatFactor).toBeCloseTo(
+      baseline.expectedCombatFactor,
+    );
+  });
+
+  it("calculates DoT state contributions without crit states", () => {
+    const breakdown = calculateDamageBreakdown(
+      {
+        ...DEFAULT_BASE_INPUTS,
+        primaryDamageType: "dot",
+        vulnerableUptime: 0.5,
+        baseAdditivePool: 1,
+        baseVulnerableDamageAdditive: 0.25,
+        baseCritChance: 1,
+        baseCritDamageAdditive: 99,
+      },
+      {
+        ...EMPTY_GEAR_TOTALS,
+        gearDotDamageAdditive: 0.5,
+        gearVulnerableDamageMultiplier: 0.5,
+        gearCritDamageMultiplier: 99,
+      },
+    );
+
+    expect(breakdown.stateBreakdown).toHaveLength(2);
+    expect(breakdown.stateBreakdown.every((state) => state.crit === false)).toBe(
+      true,
+    );
+    expect(breakdown.dotTypeFactor).toBeCloseTo(1);
+    expect(breakdown.expectedCombatFactor).toBeCloseTo(3.725);
+  });
+
+  it("applies base and gear DoT multipliers only in DoT mode", () => {
+    const breakdown = calculateDamageBreakdown(
+      {
+        ...DEFAULT_BASE_INPUTS,
+        primaryDamageType: "dot",
+        vulnerableUptime: 0,
+        baseAdditivePool: 1,
+        baseDotMultiplier: 2,
+      },
+      {
+        ...EMPTY_GEAR_TOTALS,
+        gearDotDamageAdditive: 0.5,
+        gearDotDamageMultiplier: 0.4,
+      },
+    );
+
+    expect(breakdown.dotTypeFactor).toBeCloseTo(2.8);
+    expect(breakdown.expectedCombatFactor).toBeCloseTo(7);
+  });
+
+  it("applies Type/All exactly once outside the DoT state table", () => {
+    const dotBase = {
+      ...DEFAULT_BASE_INPUTS,
+      primaryDamageType: "dot" as const,
+      vulnerableUptime: 0.5,
+    };
+    const withoutTypeAll = calculateDamageBreakdown(
+      dotBase,
+      EMPTY_GEAR_TOTALS,
+    );
+    const withTypeAll = calculateDamageBreakdown(dotBase, {
+      ...EMPTY_GEAR_TOTALS,
+      gearTypeAllDamageMultiplier: 0.5,
+    });
+
+    expect(withTypeAll.expectedCombatFactor).toBeCloseTo(
+      withoutTypeAll.expectedCombatFactor,
+    );
+    expect(withTypeAll.typeAllMultiplierFactor).toBeCloseTo(1.5);
+    expect(
+      withTypeAll.totalDamageFactor / withoutTypeAll.totalDamageFactor,
+    ).toBeCloseTo(1.5);
   });
 
   it("matches Glove A delta", () => {
@@ -518,6 +673,51 @@ describe("damage formula", () => {
   });
 });
 
+describe("affix visibility helpers", () => {
+  it("defaults missing visibility to visible for built-in and custom affixes", () => {
+    const customStats = [
+      {
+        id: "fury",
+        enabled: true,
+        name: "Maximum Fury",
+        affixLabel: "Maximum Fury",
+        baseValue: 100,
+        affixValueScale: 2,
+      },
+    ];
+    const visibility = normalizeAffixVisibility(undefined, customStats);
+
+    expect(visibility.critChance).toBe(true);
+    expect(visibility.dotDamageMultiplier).toBe(true);
+    expect(visibility["customStat:fury"]).toBe(true);
+  });
+
+  it("applies Direct Common and DoT Common presets without changing calculations", () => {
+    const item = createEquipmentItem("Test", 0);
+    item.affixes = [
+      { id: "crit", type: "critDamageMultiplier", value: 0.5 },
+      { id: "dot", type: "dotDamageMultiplier", value: 0.4 },
+    ];
+    const gearTotals = aggregateGear([item], DEFAULT_BASE_INPUTS);
+    const before = calculateDamageBreakdown(DEFAULT_BASE_INPUTS, gearTotals);
+    const directPreset = applyAffixVisibilityPreset("direct");
+    const dotPreset = applyAffixVisibilityPreset("dot");
+    const after = calculateDamageBreakdown(DEFAULT_BASE_INPUTS, gearTotals);
+
+    expect(isAffixVisible(directPreset, "dotDamageMultiplier")).toBe(false);
+    expect(isAffixVisible(directPreset, "critChance")).toBe(true);
+    expect(isAffixVisible(dotPreset, "critChance")).toBe(false);
+    expect(isAffixVisible(dotPreset, "dotDamageMultiplier")).toBe(true);
+    expect(after.totalDamageFactor).toBeCloseTo(before.totalDamageFactor);
+  });
+
+  it("Show All preset sets known affixes visible", () => {
+    const preset = applyAffixVisibilityPreset("all");
+
+    expect(Object.values(preset).every(Boolean)).toBe(true);
+  });
+});
+
 describe("global independent multiplier layer", () => {
   it("defaults to a neutral factor with no rows", () => {
     expect(calculateGlobalIndependentMultiplierFactor([], true)).toBe(1);
@@ -526,8 +726,8 @@ describe("global independent multiplier layer", () => {
   it("multiplies enabled rows as 1 + valuePercent / 100", () => {
     const factor = calculateGlobalIndependentMultiplierFactor(
       [
-        { id: "paragon", enabled: true, name: "Paragon", valuePercent: 25 },
-        { id: "buff", enabled: true, name: "Buff", valuePercent: 40 },
+        { id: "paragon", enabled: true, name: "Paragon", valuePercent: 25, target: "all" },
+        { id: "buff", enabled: true, name: "Buff", valuePercent: 40, target: "all" },
       ],
       true,
     );
@@ -537,8 +737,8 @@ describe("global independent multiplier layer", () => {
 
   it("ignores disabled rows and preserves a neutral factor when toggled off", () => {
     const rows = [
-      { id: "enabled", enabled: true, name: "Enabled", valuePercent: 25 },
-      { id: "disabled", enabled: false, name: "Disabled", valuePercent: 40 },
+      { id: "enabled", enabled: true, name: "Enabled", valuePercent: 25, target: "all" as const },
+      { id: "disabled", enabled: false, name: "Disabled", valuePercent: 40, target: "all" as const },
     ];
 
     expect(calculateGlobalIndependentMultiplierFactor(rows, true)).toBeCloseTo(
@@ -553,7 +753,7 @@ describe("global independent multiplier layer", () => {
       EMPTY_GEAR_TOTALS,
     );
     const globalFactor = calculateGlobalIndependentMultiplierFactor(
-      [{ id: "global", enabled: true, name: "Global", valuePercent: 25 }],
+      [{ id: "global", enabled: true, name: "Global", valuePercent: 25, target: "all" }],
       true,
     );
     const withGlobal = calculateDamageBreakdown(
@@ -578,8 +778,8 @@ describe("global independent multiplier layer", () => {
     );
     const globalFactor = calculateGlobalIndependentMultiplierFactor(
       [
-        { id: "paragon", enabled: true, name: "Paragon", valuePercent: 25 },
-        { id: "buff", enabled: true, name: "Buff", valuePercent: 40 },
+        { id: "paragon", enabled: true, name: "Paragon", valuePercent: 25, target: "all" },
+        { id: "buff", enabled: true, name: "Buff", valuePercent: 40, target: "all" },
       ],
       true,
     );
@@ -594,6 +794,97 @@ describe("global independent multiplier layer", () => {
       withoutGlobal.totalRelativeChange,
     );
   });
+
+  it("aggregates global independent multipliers by target", () => {
+    const factors = calculateGlobalIndependentMultiplierFactors(
+      [
+        { id: "all", enabled: true, name: "All", valuePercent: 25, target: "all" },
+        { id: "crit", enabled: true, name: "Crit", valuePercent: 30, target: "crit" },
+        {
+          id: "disabled",
+          enabled: false,
+          name: "Disabled",
+          valuePercent: 50,
+          target: "dot",
+        },
+      ],
+      true,
+    );
+
+    expect(factors.all).toBeCloseTo(1.25);
+    expect(factors.crit).toBeCloseTo(1.3);
+    expect(factors.vulnerable).toBeCloseTo(1);
+    expect(factors.dot).toBeCloseTo(1);
+  });
+
+  it("applies crit-target independent multipliers only to direct crit states", () => {
+    const directBase = {
+      ...DEFAULT_BASE_INPUTS,
+      primaryDamageType: "direct" as const,
+      baseCritChance: 0.5,
+      vulnerableUptime: 0,
+      baseMainStat: 0,
+      mainStatCoefficient: 0,
+      baseAdditivePool: 0,
+      baseCritMultiplier: 2,
+      includeWeaponDamage: false,
+      includeSkillRankDamage: false,
+      includeSkillBaseMultiplier: false,
+    };
+    const baseline = calculateDamageBreakdown(directBase, EMPTY_GEAR_TOTALS);
+    const withCritTarget = calculateDamageBreakdown(
+      directBase,
+      EMPTY_GEAR_TOTALS,
+      { all: 1, crit: 1.3, vulnerable: 1, dot: 1 },
+    );
+    const withDotTarget = calculateDamageBreakdown(
+      directBase,
+      EMPTY_GEAR_TOTALS,
+      { all: 1, crit: 1, vulnerable: 1, dot: 1.4 },
+    );
+
+    expect(baseline.expectedCombatFactor).toBeCloseTo(1.5);
+    expect(withCritTarget.expectedCombatFactor).toBeCloseTo(1.8);
+    expect(withCritTarget.stateBreakdown.find((state) => state.crit)?.independentMultiplier).toBeCloseTo(1.3);
+    expect(withDotTarget.totalDamageFactor).toBeCloseTo(baseline.totalDamageFactor);
+  });
+
+  it("applies vulnerable and dot targets correctly in DoT mode", () => {
+    const dotBase = {
+      ...DEFAULT_BASE_INPUTS,
+      primaryDamageType: "dot" as const,
+      baseCritChance: 1,
+      vulnerableUptime: 0.5,
+      baseMainStat: 0,
+      mainStatCoefficient: 0,
+      baseAdditivePool: 0,
+      baseVulnerableMultiplier: 2,
+      includeWeaponDamage: false,
+      includeSkillRankDamage: false,
+      includeSkillBaseMultiplier: false,
+    };
+    const baseline = calculateDamageBreakdown(dotBase, EMPTY_GEAR_TOTALS);
+    const withDotTarget = calculateDamageBreakdown(
+      dotBase,
+      EMPTY_GEAR_TOTALS,
+      { all: 1, crit: 1, vulnerable: 1, dot: 1.4 },
+    );
+    const withVulnerableTarget = calculateDamageBreakdown(
+      dotBase,
+      EMPTY_GEAR_TOTALS,
+      { all: 1, crit: 1, vulnerable: 1.3, dot: 1 },
+    );
+    const withCritTarget = calculateDamageBreakdown(
+      dotBase,
+      EMPTY_GEAR_TOTALS,
+      { all: 1, crit: 2, vulnerable: 1, dot: 1 },
+    );
+
+    expect(baseline.expectedCombatFactor).toBeCloseTo(1.5);
+    expect(withDotTarget.expectedCombatFactor).toBeCloseTo(2.1);
+    expect(withVulnerableTarget.expectedCombatFactor).toBeCloseTo(1.8);
+    expect(withCritTarget.totalDamageFactor).toBeCloseTo(baseline.totalDamageFactor);
+  });
 });
 
 describe("equipment independent multiplier layer", () => {
@@ -607,8 +898,8 @@ describe("equipment independent multiplier layer", () => {
   it("multiplies enabled item rows as 1 + valuePercent / 100", () => {
     const item = createEquipmentItem("Aspect item", 0);
     item.itemIndependentMultipliers = [
-      { id: "aspect", enabled: true, name: "Aspect", valuePercent: 35 },
-      { id: "unique", enabled: true, name: "Unique", valuePercent: 120 },
+      { id: "aspect", enabled: true, name: "Aspect", valuePercent: 35, target: "all" },
+      { id: "unique", enabled: true, name: "Unique", valuePercent: 120, target: "all" },
     ];
 
     expect(calculateItemIndependentMultiplierFactor(item)).toBeCloseTo(
@@ -619,8 +910,8 @@ describe("equipment independent multiplier layer", () => {
   it("ignores disabled item rows", () => {
     const item = createEquipmentItem("Aspect item", 0);
     item.itemIndependentMultipliers = [
-      { id: "enabled", enabled: true, name: "Enabled", valuePercent: 35 },
-      { id: "disabled", enabled: false, name: "Disabled", valuePercent: 120 },
+      { id: "enabled", enabled: true, name: "Enabled", valuePercent: 35, target: "all" },
+      { id: "disabled", enabled: false, name: "Disabled", valuePercent: 120, target: "all" },
     ];
 
     expect(calculateItemIndependentMultiplierFactor(item)).toBeCloseTo(1.35);
@@ -630,10 +921,10 @@ describe("equipment independent multiplier layer", () => {
     const itemA = createEquipmentItem("Item A", 0);
     const itemB = createEquipmentItem("Item B", 0);
     itemA.itemIndependentMultipliers = [
-      { id: "a", enabled: true, name: "A", valuePercent: 35 },
+      { id: "a", enabled: true, name: "A", valuePercent: 35, target: "all" },
     ];
     itemB.itemIndependentMultipliers = [
-      { id: "b", enabled: true, name: "B", valuePercent: 120 },
+      { id: "b", enabled: true, name: "B", valuePercent: 120, target: "all" },
     ];
 
     expect(calculateEquipmentIndependentMultiplierFactor([itemA, itemB])).toBeCloseTo(
@@ -644,7 +935,7 @@ describe("equipment independent multiplier layer", () => {
   it("scales the Damage Index through equipment breakdown", () => {
     const item = createEquipmentItem("Aspect item", 0);
     item.itemIndependentMultipliers = [
-      { id: "aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+      { id: "aspect", enabled: true, name: "Aspect", valuePercent: 35, target: "all" },
     ];
     const without = calculateEquipmentBreakdown(DEFAULT_BASE_INPUTS, []);
     const withItemMultiplier = calculateEquipmentBreakdown(DEFAULT_BASE_INPUTS, [
@@ -663,10 +954,10 @@ describe("equipment independent multiplier layer", () => {
     const current = createEquipmentItem("Current", 0);
     const candidate = createEquipmentItem("Candidate", 0);
     current.itemIndependentMultipliers = [
-      { id: "current-aspect", enabled: true, name: "Current", valuePercent: 35 },
+      { id: "current-aspect", enabled: true, name: "Current", valuePercent: 35, target: "all" },
     ];
     candidate.itemIndependentMultipliers = [
-      { id: "candidate-unique", enabled: true, name: "Candidate", valuePercent: 120 },
+      { id: "candidate-unique", enabled: true, name: "Candidate", valuePercent: 120, target: "all" },
     ];
 
     const comparison = compareWithReplacement(
@@ -685,8 +976,8 @@ describe("equipment independent multiplier layer", () => {
   it("calculates row contribution by removing only that row", () => {
     const item = createEquipmentItem("Aspect item", 0);
     item.itemIndependentMultipliers = [
-      { id: "aspect", enabled: true, name: "Aspect", valuePercent: 35 },
-      { id: "unique", enabled: true, name: "Unique", valuePercent: 120 },
+      { id: "aspect", enabled: true, name: "Aspect", valuePercent: 35, target: "all" },
+      { id: "unique", enabled: true, name: "Unique", valuePercent: 120, target: "all" },
     ];
 
     const contribution = calculateItemIndependentMultiplierContribution({
@@ -697,6 +988,19 @@ describe("equipment independent multiplier layer", () => {
     });
 
     expect(contribution).toBeCloseTo(0.35);
+  });
+
+  it("aggregates equipment independent multipliers by target", () => {
+    const item = createEquipmentItem("Aspect item", 0);
+    item.itemIndependentMultipliers = [
+      { id: "all", enabled: true, name: "All", valuePercent: 25, target: "all" },
+      { id: "dot", enabled: true, name: "DoT", valuePercent: 40, target: "dot" },
+    ];
+
+    const factors = calculateEquipmentIndependentMultiplierFactors([item]);
+
+    expect(factors.all).toBeCloseTo(1.25);
+    expect(factors.dot).toBeCloseTo(1.4);
   });
 });
 
@@ -763,7 +1067,7 @@ describe("candidate item comparison helpers", () => {
     const candidate = createEquipmentItem("Candidate", 0);
     candidate.affixes = [];
     candidate.itemIndependentMultipliers = [
-      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35, target: "all" },
     ];
 
     const contribution = calculateCandidateRowContribution({
@@ -789,7 +1093,7 @@ describe("candidate item comparison helpers", () => {
       { id: "candidate-extra", type: "typeAllDamageMultiplier", value: 0.2 },
     ];
     candidate.itemIndependentMultipliers = [
-      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35, target: "all" },
     ];
     candidate.targetCapstoneAffixId = "candidate-type";
 
@@ -885,7 +1189,7 @@ describe("candidate item comparison helpers", () => {
       { id: "candidate-extra", type: "typeAllDamageMultiplier", value: 0.2 },
     ];
     candidate.itemIndependentMultipliers = [
-      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35 },
+      { id: "candidate-aspect", enabled: true, name: "Aspect", valuePercent: 35, target: "all" },
     ];
 
     const replacement = replaceEquipmentItemWithCandidate(current, candidate);
